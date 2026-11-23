@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拼音星球 · 可点击原型</title>
+<style>
+  :root{
+    --ink:#232a3a; --muted:#7d8598; --line:#e6e4ef;
+    --bg:#f3effa; --card:#fff; --accent:#6c5ce7; --accent2:#8e7bf0;
+    --gold:#e0a92a; --green:#12a67f; --red:#d4674f;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    margin:0;min-height:100vh;background:#efebe6;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;padding:28px 16px;gap:14px;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);
+  }
+  .caption{font-size:13px;color:#6f6a63;text-align:center;line-height:1.7;max-width:420px}
+  .caption b{color:#3d3a34}
+  .phone{
+    width:392px;height:774px;background:linear-gradient(180deg,#f7f3ff 0%,#f3eefb 55%,#eef4fb 100%);
+    border-radius:38px;box-shadow:0 24px 60px rgba(60,50,100,.22),0 2px 0 #fff inset;
+    overflow:hidden;display:flex;flex-direction:column;position:relative;border:8px solid #fff;
+  }
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 8px;flex:none}
+  .topbar .left{display:flex;align-items:center;gap:8px}
+  .topbar h1{font-size:16px;margin:0;letter-spacing:.02em}
+  .chip{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:12px;color:#5d5a70;font-weight:600}
+  .chip.gold{color:#a97a10;border-color:#f0e0b6;background:#fdf8ea}
+  .main{flex:1;overflow-y:auto;padding:6px 16px 30px;scrollbar-width:none}
+  .main::-webkit-scrollbar{display:none}
+  .nav{flex:none;height:62px;display:flex;background:rgba(255,255,255,.92);border-top:1px solid var(--line);backdrop-filter:blur(6px)}
+  .nav button{flex:1;border:0;background:none;font-size:11px;color:#9a97ab;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-family:inherit;cursor:pointer}
+  .nav button .ico{display:flex;align-items:center;justify-content:center;height:20px}
+  .nav button.on{color:var(--accent);font-weight:700}
+  /* 地图 */
+  .hero{margin:2px 0 14px;text-align:center}
+  .hero .t{font-size:15px;font-weight:700}
+  .hero .s{font-size:12px;color:var(--muted);margin-top:3px}
+  .planets{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-bottom:8px}
+  .pl{position:relative;background:#fff;border:1px solid var(--line);border-radius:16px;padding:13px 12px 11px;cursor:pointer;transition:.16s;overflow:hidden}
+  .pl:active{transform:scale(.975)}
+  .pl .num{width:24px;height:24px;border-radius:8px;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+  .pl .nm{font-size:13.5px;font-weight:700;letter-spacing:.01em}
+  .pl .sub{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.45;min-height:30px}
+  .pl .stars{display:flex;gap:2px;margin-top:7px;font-size:10px;color:#ded8ee}
+  .pl .stars b{color:var(--gold)}
+  .pl.lock{opacity:.62;background:#faf9fd}
+  .pl.lock .num{background:#cfc9e0 !important}
+  .pl .lockicon{position:absolute;right:10px;top:10px;font-size:13px;color:#b8b2cc}
+  .pl.boss{grid-column:1 / -1;background:linear-gradient(120deg,#fff,#fdf6e6);border-color:#f2e3bb}
+  .pl.boss .sub{min-height:0}
+  /* 关卡 */
+  .qhead{display:flex;align-items:center;gap:10px;margin:4px 0 14px}
+  .back{width:34px;height:34px;border-radius:11px;border:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;color:#5f5c72}
+  .dots{display:flex;gap:5px;flex:1;justify-content:center}
+  .dots i{width:22px;height:5px;border-radius:99px;background:#e2ddf0}
+  .dots i.done{background:var(--accent)}
+  .dots i.now{background:var(--accent2);box-shadow:0 0 0 3px #ece7ff}
+  .qcard{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px 18px;box-shadow:0 8px 22px rgba(80,70,130,.06)}
+  .playbtn{width:96px;height:96px;border-radius:50%;margin:4px auto 14px;background:radial-gradient(circle at 35% 30%,#9b8bff,#6c5ce7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:36px;cursor:pointer;border:0;box-shadow:0 10px 24px rgba(108,92,231,.32);transition:.15s}
+  .playbtn:active{transform:scale(.94)}
+  .playbtn.pulse{animation:pulse 1.9s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 10px 24px rgba(108,92,231,.30)}50%{box-shadow:0 10px 34px rgba(108,92,231,.52)}}
+  .qtext{text-align:center;font-size:13.5px;color:#5a566e;margin-bottom:4px}
+  .qtext b{color:var(--accent);font-weight:700}
+  .compose{display:flex;align-items:center;justify-content:center;gap:10px;margin:10px 0 16px}
+  .tile{min-width:52px;height:56px;padding:0 10px;border-radius:14px;background:linear-gradient(180deg,#fff,#f4f1fd);border:1px solid #e2dcf5;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#4b3fa8}
+  .compose .eq{font-size:20px;color:#b7b1cb}
+  .compose .qm{width:56px;height:56px;border-radius:14px;border:2px dashed #cfc7ea;display:flex;align-items:center;justify-content:center;color:#b9b2d6;font-size:22px}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .opt{min-height:64px;border-radius:16px;border:1.5px solid #e6e1f4;background:#fff;font-size:22px;font-weight:700;color:#3f3a5c;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.12s;font-family:inherit;letter-spacing:.01em}
+  .opt:active{transform:scale(.97)}
+  .opt.ok{border-color:var(--green);background:#e9f8f2;color:#0b7a5d}
+  .opt.no{border-color:var(--red);background:#fdeeea;color:#a9422d;animation:shake .32s}
+  .opt.tone{font-size:24px}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  .hint{text-align:center;font-size:12px;color:var(--muted);margin-top:12px;min-height:17px}
+  /* 结算 */
+  .res{text-align:center;padding-top:18px}
+  .res .bigstar{font-size:40px;letter-spacing:6px;color:#e6e0f5}
+  .res .bigstar b{color:var(--gold)}
+  .res .title{font-size:19px;font-weight:800;margin:12px 0 4px}
+  .res .sub{font-size:13px;color:var(--muted)}
+  .dropcard{margin:22px auto 6px;width:132px;height:184px;border-radius:16px;background:linear-gradient(160deg,#fff,#f7f3ff);border:1px solid #e4dcff;box-shadow:0 14px 30px rgba(108,92,231,.16);display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;animation:pop .5s cubic-bezier(.2,1.4,.5,1)}
+  .dropcard.rare{background:linear-gradient(160deg,#fffdf3,#fdefc8);border-color:#f0dca0;box-shadow:0 14px 30px rgba(201,138,18,.20)}
+  @keyframes pop{0%{transform:scale(.4) rotate(-8deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+  .dropcard .g{font-size:46px;font-weight:800;color:#4b3fa8}
+  .dropcard.rare .g{color:#a9740b}
+  .dropcard .tag{position:absolute;top:10px;font-size:11px;font-weight:700;color:#9b8ee8;letter-spacing:.08em}
+  .dropcard.rare .tag{color:#c08a13}
+  .dropcard .nm{position:absolute;bottom:12px;font-size:11px;color:#8b84a5}
+  .btnrow{display:flex;gap:10px;margin-top:26px}
+  .btn{flex:1;height:50px;border-radius:14px;border:0;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
+  .btn.primary{background:var(--accent);color:#fff;box-shadow:0 8px 18px rgba(108,92,231,.26)}
+  .btn.ghost{background:#fff;color:#5f5c72;border:1px solid var(--line)}
+  /* 卡册 */
+  .bookhead{display:flex;align-items:baseline;justify-content:space-between;margin:2px 0 12px}
+  .bookhead .n{font-size:19px;font-weight:800}
+  .cnt{font-size:12px;color:var(--muted)}
+  /* 本关掉落 */
+  .loot{margin-top:16px;background:rgba(255,255,255,.66);border:1px dashed #ddd5f2;border-radius:16px;padding:12px 14px}
+  .loot .lb{font-size:11px;color:#9a93b3;letter-spacing:.06em;margin-bottom:9px}
+  .lootrow{display:flex;gap:7px;flex-wrap:wrap}
+  .lc{min-width:38px;height:44px;padding:0 6px;border-radius:10px;background:#fff;border:1px solid #e6dffb;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#4b3fa8}
+  .lc.has{background:linear-gradient(160deg,#fffdf4,#fdf0cd);border-color:#efdca5;color:#a9740b}
+  .lc.no{background:#f7f6fb;border-style:dashed;color:#cdc7dd;font-size:12px}
+  .pet>svg{display:block}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  .c{aspect-ratio:4/5;border-radius:11px;background:linear-gradient(160deg,#fff,#f6f2ff);border:1px solid #e6dffb;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;color:#4b3fa8;position:relative;cursor:pointer;font-size:16px;padding-bottom:6px}
+  .c .k{position:absolute;bottom:4px;font-size:8.5px;font-weight:600;color:#a49dc0;letter-spacing:.02em}
+  .c.rare{background:linear-gradient(160deg,#fffdf4,#fdf0cd);border-color:#efdca5;color:#a9740b}
+  .c.lock{background:#f7f6fb;border-style:dashed;border-color:#e0dbee;color:#cbc5dc;cursor:default}
+  .c.lock .k{color:#d3cee0}
+  /* 宠物 */
+  .petwrap{text-align:center;padding:10px 0 0}
+  .pet{width:150px;height:150px;margin:6px auto 10px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff,#efe9ff 62%,#e3d9ff);display:flex;align-items:center;justify-content:center;font-size:66px;box-shadow:0 16px 34px rgba(108,92,231,.14);animation:float 3.2s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  .petstage{font-size:16px;font-weight:800}
+  .petsub{font-size:12.5px;color:var(--muted);margin-top:4px}
+  .prog{height:12px;border-radius:99px;background:#e9e3f8;margin:16px 0 6px;overflow:hidden}
+  .prog i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#8e7bf0,#6c5ce7)}
+  .progtip{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:20px 0}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center}
+  .stat b{display:block;font-size:19px;color:#3f3a5c}
+  .stat span{font-size:10.5px;color:var(--muted)}
+  /* 弹层 */
+  .sheet{position:absolute;inset:0;background:rgba(30,26,45,.34);display:flex;align-items:flex-end;z-index:20}
+  .sheet .inner{background:#fff;width:100%;border-radius:22px 22px 0 0;padding:22px 20px 26px;text-align:center;animation:up .24s ease-out}
+  @keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:translateY(0);opacity:1}}
+  .sheet .g{font-size:52px;font-weight:800;color:#4b3fa8;line-height:1.1}
+  .sheet .type{font-size:11.5px;color:#9b8ee8;font-weight:700;letter-spacing:.1em;margin-bottom:2px}
+  .sheet .mn{font-size:13.5px;color:#5a566e;margin:10px 0 18px;line-height:1.7;min-height:22px}
+  .toast{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);background:rgba(40,34,60,.9);color:#fff;font-size:12.5px;padding:8px 14px;border-radius:99px;opacity:0;transition:.3s;pointer-events:none;z-index:30;white-space:nowrap}
+  .toast.on{opacity:1;bottom:98px}
+  .mini{font-size:11px;color:#a8a3b8;background:none;border:0;cursor:pointer;font-family:inherit}
+</style>
+</head>
+<body>
+
+<div class="caption">
+  <b>拼音星球 · 可点击原型</b><br>
+  用项目里真实的发音文件（<code>assets/audio/bd/*.mp3</code>）。请把本文件放在项目根目录打开，音频才播得出来。
+</div>
+
+<div class="phone" id="phone">
+  <div class="topbar">
+    <div class="left">
+      <h1 id="ttl">拼音星球</h1>
+    </div>
+    <div class="left">
+      <span class="chip gold">★ <span id="starNum">0</span></span>
+      <button class="mini" data-act="reset">重置</button>
+    </div>
+  </div>
+  <div class="main" id="app"></div>
+  <div class="nav">
+    <button data-nav="map" class="on"><span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5l6-3 6 3 6-3v14l-6 3-6-3-6 3z"/><path d="M9 3.5v14M15 6.5v14"/></svg></span>地图</button>
+    <button data-nav="book"><span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="11" height="15" rx="2"/><path d="M7 3h11a2 2 0 0 1 2 2v12"/></svg></span>卡册</button>
+    <button data-nav="pet"><span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.6 0 6.5 5.4 6.5 9.4A6.5 6.5 0 0 1 5.5 12.4C5.5 8.4 8.4 3 12 3z"/><path d="M9.4 10.6h.01M14.6 10.6h.01"/></svg></span>拼拼</button>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ---------------- 数据 ---------------- */
+const PLANETS = [
+  { id:1, name:'单韵母草原', sub:'a o e i u ü', color:'#6c5ce7',
+    cards:['a','o','e','i','u','ü'],
+    pool:[['a',1,'a'],['a',2,'a'],['a',3,'a'],['a',4,'a'],['o',1,'o'],['o',2,'o'],['o',3,'o'],['o',4,'o'],
+          ['e',1,'e'],['e',2,'e'],['e',3,'e'],['e',4,'e'],['i',1,'yi'],['i',2,'yi'],['i',3,'yi'],['i',4,'yi'],
+          ['u',1,'wu'],['u',2,'wu'],['u',3,'wu'],['u',4,'wu'],['ü',1,'yu'],['ü',2,'yu'],['ü',3,'yu'],['ü',4,'yu']],
+    toneQuiz:true, compose:null },
+
+  { id:2, name:'双唇森林', sub:'b p m f', color:'#8e7bf0',
+    cards:['b','p','m','f'],
+    pool:[['ba',1],['ba',2],['ba',3],['ba',4],['pa',1],['pa',2],['pa',4],['ma',1],['ma',2],['ma',3],['ma',4],['fa',1],['fa',2],['fa',3],['fa',4]],
+    toneQuiz:false,
+    compose:[['b','a','ba'],['p','i','pi'],['m','a','ma'],['f','u','fu']],
+    mnemonic:{b:'收听广播 b b b，右下半圆 b b b',p:'右上半圆 p p p，端盆泼水 p p p',m:'两个门洞 m m m',f:'一根拐杖 f f f'} },
+
+  { id:3, name:'舌尖山谷', sub:'d t n l', color:'#12a67f',
+    cards:['d','t','n','l'],
+    pool:[['da',1],['da',2],['da',3],['da',4],['ta',1],['ta',3],['ta',4],['na',1],['na',2],['na',3],['na',4],['la',1],['la',2],['la',3],['la',4]],
+    toneQuiz:false,
+    compose:[['d','a','da'],['t','a','ta'],['n','i','ni'],['l','u','lu']],
+    mnemonic:{d:'左下半圆 d d d，马蹄印儿 d d d',t:'伞柄朝下 t t t',n:'一个门洞 n n n',l:'一根小棍 l l l'} },
+
+  { id:4, name:'舌根山洞', sub:'g k h · j q x', color:'#2f9e8f',
+    cards:['g','k','h','j','q','x'],
+    pool:[['ge',1],['ge',2],['ge',3],['ge',4],['ke',1],['ke',2],['he',1],['he',2],['ji',1],['ji',2],['ji',3],['ji',4],['qi',1],['qi',2],['qi',3],['xi',1],['xi',2],['xi',4]],
+    toneQuiz:false,
+    compose:[['g','e','ge'],['k','e','ke'],['h','e','he'],['j','i','ji'],['q','i','qi'],['x','i','xi']],
+    mnemonic:{g:'9 字加弯 g g g，白鸽飞翔 g g g',k:'蝌蚪戏水 k k k',h:'一把椅子 h h h',j:'竖弯加点 j j j，公鸡蝴蝶 j j j',q:'左上半圆 q q q，七个气球 q q q',x:'一个大叉 x x x，西瓜切片 x x x'} },
+
+  { id:5, name:'平翘舌城', sub:'zh ch sh r · z c s', color:'#c98a12',
+    cards:['zh','ch','sh','r','z','c','s','y','w'],
+    pool:[['zhi',1],['zhi',2],['zhi',3],['zhi',4],['chi',1],['chi',2],['chi',4],['shi',1],['shi',2],['shi',3],['zi',1],['zi',2],['zi',3],['ci',1],['ci',2],['si',1],['si',3],['si',4]],
+    toneQuiz:false,
+    compose:[['zh','a','zha'],['ch','a','cha'],['sh','a','sha'],['z','i','zi'],['c','i','ci'],['s','i','si']],
+    mnemonic:{zh:'蜘蛛结网 zh zh zh',ch:'小刺猬吃果 ch ch ch',sh:'狮子舞蹈 sh sh sh',r:'日出东方 r r r',z:'像个 2 字 z z z',c:'半个圆圈 c c c',s:'半个 8 字 s s s',y:'树杈 y y y',w:'两个屋顶 w w w'} },
+
+  { id:6, name:'复韵母海湾', sub:'ai ei ui ao ou iu ie üe er', color:'#d9822b',
+    cards:['ai','ei','ui','ao','ou','iu','ie','üe','er'],
+    pool:[['ai',1],['ai',2],['ai',3],['ai',4],['ao',1],['ao',2],['ao',3],['ao',4],['ou',1],['ou',2],['ou',3],['ou',4],['an',1],['an',2],['an',3],['en',1],['en',2],['en',3]],
+    toneQuiz:true, compose:null },
+
+  { id:7, name:'鼻韵母星空', sub:'an en in · ang eng ing', color:'#2f6fb3',
+    cards:['an','en','in','un','ün','ang','eng','ing','ong'],
+    pool:[['ang',1],['ang',2],['ang',4],['eng',1],['ying',1],['ying',2],['ying',3],['ying',4],['an',1],['an',4],['en',2]],
+    toneQuiz:true, compose:null },
+
+  { id:8, name:'整体认读神殿', sub:'zhi chi shi ri … ying', color:'#7a5bd6',
+    cards:['zhi','chi','shi','ri','zi','ci','si','yi','wu','yu','ye','yue','yuan','yin','yun','ying'],
+    pool:[['zhi',1],['chi',1],['shi',1],['yi',2],['wu',3],['yu',2],['ying',1],['zhi',4],['chi',3],['shi',4],['yi',4],['wu',1]],
+    toneQuiz:true, compose:null }
+];
+
+const ALL_CARDS = PLANETS.flatMap(p=>p.cards.map(c=>({g:c, planet:p.id, color:p.color})));
+const MNEMONIC = Object.assign({},
+  {b:'收听广播 b b b，右下半圆 b b b',p:'右上半圆 p p p，端盆泼水 p p p',m:'两个门洞 m m m',f:'一根拐杖 f f f',
+   d:'左下半圆 d d d，马蹄印儿 d d d',t:'伞柄朝下 t t t',n:'一个门洞 n n n',l:'一根小棍 l l l',
+   g:'9 字加弯 g g g，白鸽飞翔 g g g',k:'蝌蚪戏水 k k k',h:'一把椅子 h h h',
+   j:'竖弯加点 j j j，公鸡蝴蝶 j j j',q:'左上半圆 q q q，七个气球 q q q',x:'一个大叉 x x x，西瓜切片 x x x',
+   zh:'蜘蛛结网 zh zh zh',ch:'小刺猬吃果 ch ch ch',sh:'狮子舞蹈 sh sh sh',r:'日出东方 r r r',
+   z:'像个 2 字 z z z',c:'半个圆圈 c c c',s:'半个 8 字 s s s',y:'树杈 y y y',w:'两个屋顶 w w w'}
+);
+
+/* ---------------- 存档 ---------------- */
+const KEY='pinyinpal_planet_proto_v1';
+let SV = load();
+function load(){
+  try{ const o=JSON.parse(localStorage.getItem(KEY)); if(o&&o.levels) return o; }catch(e){}
+  return { levels:{}, cards:[], stars:0 };
+}
+function save(){ try{localStorage.setItem(KEY,JSON.stringify(SV));}catch(e){} }
+function totalStars(){ return Object.values(SV.levels).reduce((a,b)=>a+b,0); }
+function petStage(){ const s=totalStars(); return s>=80?3:s>=30?2:1; }
+
+/* ---------------- 音频 ---------------- */
+let curAudio=null;
+function playUrls(list, onFail){
+  if(curAudio){ try{curAudio.pause();}catch(e){} }
+  let i=0;
+  const tryNext=()=>{
+    if(i>=list.length){ onFail&&onFail(); return; }
+    const a=new Audio(list[i++]);
+    curAudio=a;
+    a.onerror=tryNext;
+    a.play().catch(tryNext);
+  };
+  tryNext();
+}
+function playSyl(syl, tone, audioSyl){
+  const src=audioSyl||syl;
+  const v=src.replace(/ü/g,'v');
+  const urls=[];
+  if(tone) urls.push('assets/audio/bd/'+v+tone+'.mp3');
+  urls.push('assets/audio/'+src+'.m4a','assets/audio/'+v+'.m4a');
+  playUrls(urls);
+}
+function ding(ok){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    const c=new AC(); const t=c.currentTime;
+    const notes = ok ? [880,1174,1568] : [300,220];
+    notes.forEach((f,k)=>{
+      const o=c.createOscillator(), g=c.createGain();
+      o.type='sine'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,t+k*0.07);
+      g.gain.exponentialRampToValueAtTime(0.12,t+k*0.07+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+k*0.07+0.20);
+      o.connect(g); g.connect(c.destination); o.start(t+k*0.07); o.stop(t+k*0.07+0.24);
+    });
+    setTimeout(()=>c.close(),700);
+  }catch(e){}
+}
+
+/* ---------------- 声调 ---------------- */
+const TM={a:['ā','á','ǎ','à'],o:['ō','ó','ǒ','ò'],e:['ē','é','ě','è'],i:['ī','í','ǐ','ì'],u:['ū','ú','ǔ','ù'],'ü':['ǖ','ǘ','ǚ','ǜ']};
+function toneMark(syl,tone){
+  if(!tone) return syl;
+  const ch=[...syl]; let idx=-1;
+  const at=c=>ch.indexOf(c);
+  if(at('a')>=0) idx=at('a');
+  else if(at('o')>=0) idx=at('o');
+  else if(at('e')>=0) idx=at('e');
+  else if(syl.indexOf('iu')>=0) idx=syl.lastIndexOf('u');
+  else if(syl.indexOf('ui')>=0) idx=syl.lastIndexOf('i');
+  else { for(let k=ch.length-1;k>=0;k--){ if('iuü'.indexOf(ch[k])>=0){ idx=k; break; } } }
+  if(idx<0) return syl;
+  const t=TM[ch[idx]]; if(!t) return syl;
+  ch[idx]=t[Math.min(Math.max(tone,1),4)-1];
+  return ch.join('');
+}
+
+/* ---------------- 状态 ---------------- */
+const S={view:'map', planet:null, levelIdx:0, qs:[], qi:0, wrongSet:{}, locked:false, result:null, sheet:null};
+const rnd=n=>Math.floor(Math.random()*n);
+function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]];} return a; }
+function pick(arr,n){ return shuffle(arr).slice(0,n); }
+
+function levelKey(p,i){ return p+'|'+i; }
+function levelStars(p,i){ return SV.levels[levelKey(p,i)]||0; }
+function planetDone(p){ let n=0; for(let i=0;i<4;i++) if(levelStars(p,i)>0) n++; return n; }
+function planetUnlocked(p){ return p===1 || planetDone(p-1)>0; }
+
+/* ---------------- 出题 ---------------- */
+function makeQuestion(pl, boss){
+  const useCompose = pl.compose && (boss ? Math.random()<0.5 : Math.random()<0.25) && S.qi>0;
+  if(useCompose){
+    const pair = pl.compose[rnd(pl.compose.length)];
+    const opts = shuffle(pl.compose.map(x=>x[2]).concat(pick(pl.pool.map(x=>x[0]),2)));
+    const uniq=[...new Set(opts)].slice(0,4);
+    if(!uniq.includes(pair[2])) uniq[0]=pair[2];
+    return {type:'compose', initial:pair[0], final:pair[1], answer:pair[2], answerTone:1,
+            options:shuffle(uniq), prompt:'拼一拼，选出拼好的音节'};
+  }
+  if(pl.toneQuiz && Math.random()<(boss?0.6:0.35)){
+    const it=pl.pool[rnd(pl.pool.length)];
+    const [syl,tone,as]=it;
+    const opts=[1,2,3,4].map(t=>toneMark(syl,t));
+    return {type:'tone', syl, tone, audioSyl:as, answer:toneMark(syl,tone), answerTone:tone,
+            options:opts, prompt:'听一听，这是第几声？'};
+  }
+  const it=pl.pool[rnd(pl.pool.length)];
+  const [syl,tone,as]=it;
+  const others=[...new Set(pl.pool.filter(x=>x[0]!==syl).map(x=>x[0]))];
+  const opts=shuffle([syl].concat(pick(others,3)));
+  return {type:'pick', syl, tone, audioSyl:as, answer:syl, answerTone:tone,
+          options:opts.map(x=>x), prompt:'听一听，选出正确的拼音', showTone:true};
+}
+
+function startLevel(pi, li){
+  const pl=PLANETS[pi-1];
+  S.planet=pi; S.levelIdx=li; S.qi=0; S.wrongSet={}; S.locked=false; S.sheet=null;
+  S.qs=[]; for(let i=0;i<5;i++) S.qs.push(makeQuestion(pl, li===3));
+  S.view='level';
+  render();
+  setTimeout(()=>speakQ(), 260);
+}
+
+function speakQ(){
+  const q=S.qs[S.qi]; if(!q) return;
+  if(q.type==='compose'){
+    playSyl(q.answer, 1);
+  }else{
+    playSyl(q.syl, q.tone, q.audioSyl);
+  }
+}
+
+/* ---------------- 渲染 ---------------- */
+const app=document.getElementById('app');
+const ttl=document.getElementById('ttl');
+const toastEl=document.getElementById('toast');
+function toast(msg){
+  toastEl.textContent=msg; toastEl.classList.add('on');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.classList.remove('on'),1500);
+}
+function render(){
+  document.getElementById('starNum').textContent=totalStars();
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on', b.dataset.nav===S.view));
+  ttl.textContent = S.view==='map'?'拼音星球': S.view==='book'?'卡册': S.view==='pet'?'拼拼': S.view==='level'?'闯关中':'结算';
+  const map={map:renderMap, level:renderLevel, result:renderResult, book:renderBook, pet:renderPet};
+  app.innerHTML=(map[S.view]||renderMap)();
+  app.scrollTop=0;
+  if(S.sheet) app.innerHTML+=renderSheet();
+  if(S.view==='level') bindOpts();
+}
+
+function renderMap(){
+  const rows=PLANETS.map(p=>{
+    const lock=!planetUnlocked(p.id);
+    const done=planetDone(p.id);
+    const bossStars=levelStars(p.id,3);
+    return `<div class="pl ${lock?'lock':''}" data-act="planet" data-p="${p.id}">
+      <div class="num" style="background:${p.color}">${p.id}</div>
+      <div class="nm">${p.name}</div>
+      <div class="sub">${p.sub}</div>
+      <div class="stars">${[0,1,2].map(i=>i<done?'<b>★</b>':'★').join('')}<span style="color:#b8b2cc;font-size:10px;margin-left:4px">${done}/3 关${bossStars?' · BOSS ★'.replace('★',bossStars):''}</span></div>
+      ${lock?'<div class="lockicon">🔒</div>':''}
+    </div>`;
+  }).join('');
+  return `<div class="hero"><div class="t">带拼拼回家</div><div class="s">已收集 ${SV.cards.length} / 63 张精灵卡</div></div>
+          <div class="planets">${rows}</div>
+          <p style="font-size:11.5px;color:#9a95ab;text-align:center;margin:14px 0 4px;line-height:1.6">原型只做了第 1 星球的三关 + BOSS，其余星球按同结构复制即可。</p>`;
+}
+
+function renderLevel(){
+  const pl=PLANETS[S.planet-1];
+  const q=S.qs[S.qi];
+  const boss=S.levelIdx===3;
+  const dots=[0,1,2,3,4].map(i=>`<i class="${i<S.qi?'done':i===S.qi?'now':''}"></i>`).join('');
+  let body='';
+  if(q.type==='compose'){
+    body=`<div class="compose">
+        <div class="tile">${q.initial}</div><span class="eq">+</span>
+        <div class="tile">${q.final}</div><span class="eq">=</span>
+        <div class="qm">?</div>
+      </div>`;
+  }else{
+    body=`<button class="playbtn pulse" data-act="play">🔊</button>`;
+  }
+  const opts=q.options.map((o,i)=>{
+    if(q.type==='tone'){
+      return `<button class="opt tone" data-act="opt" data-i="${i}" data-v="${o}">${o}</button>`;
+    }
+    return `<button class="opt" data-act="opt" data-i="${i}" data-v="${o}">${o}</button>`;
+  }).join('');
+  const owned=new Set(SV.cards);
+  const loot=pl.cards.slice(0,8).map(g=>`<div class="lc ${owned.has(g)?'has':'no'}">${owned.has(g)?g:'?'}</div>`).join('');
+  return `<div class="qhead">
+      <button class="back" data-act="back">‹</button>
+      <div class="dots">${dots}</div>
+      <span class="chip">${boss?'BOSS':'第 '+(S.levelIdx+1)+' 关'}</span>
+    </div>
+    <div class="qcard">
+      <div class="qtext">${q.type==='compose'?'拼一拼，选出拼好的音节':q.type==='tone'?'听一听，这是第几声？':'听一听，选出正确的拼音'} · <b>${pl.name}</b></div>
+      ${body}
+      <div class="opts">${opts}</div>
+      <div class="hint" id="hint">${boss?'三颗心 · 答错掉一颗':'答对就能收集精灵卡'}</div>
+    </div>
+    <div class="loot">
+      <div class="lb">本星球可收集 · ${owned.has(pl.cards[0])?'已开张':'还差一张'}</div>
+      <div class="lootrow">${loot}</div>
+    </div>`;
+}
+
+function renderResult(){
+  const r=S.result;
+  const stars='★★★'.split('').map((s,i)=>`<span style="color:${i<r.stars?'#e0a92a':'#e6e0f5'}">★</span>`).join('');
+  const card=r.card;
+  const cardHtml=card?`<div class="dropcard ${r.rare?'rare':''}">
+      <div class="tag">${r.rare?'闪卡':'新卡片'}</div>
+      <div class="g">${card.g}</div>
+      <div class="nm">${card.planet===1?'单韵母星球':'第 '+card.planet+' 星球'}</div>
+    </div>`:`<div class="dropcard" style="justify-content:center">
+      <div class="g" style="color:#c9c2de">★</div>
+      <div class="nm">重复卡 · 换 5 颗星</div>
+    </div>`;
+  return `<div class="res">
+      <div class="bigstar" style="font-size:34px;letter-spacing:8px">${stars}</div>
+      <div class="title">${r.stars===3?'太棒了，一次没错！':r.stars===2?'很不错，只错了一个':'过关啦，再来一次会更好'}</div>
+      <div class="sub">本关 5 题 · 答错 ${r.wrong} 次</div>
+      ${cardHtml}
+      <div class="btnrow">
+        <button class="btn ghost" data-act="again">再来一次</button>
+        <button class="btn primary" data-act="tomap">回到地图</button>
+      </div>
+    </div>`;
+}
+
+function renderBook(){
+  const owned=new Set(SV.cards);
+  const rare=new Set(SV.rare||[]);
+  const cells=ALL_CARDS.map(c=>{
+    const has=owned.has(c.g);
+    return `<div class="c ${has?'':'lock'} ${has&&rare.has(c.g)?'rare':''}" data-act="card" data-g="${c.g}" style="${has&&!rare.has(c.g)?'border-color:'+hexA(c.color,.35):''}">
+      ${has?c.g:'?'}<span class="k">${has?'已收集':'未获得'}</span></div>`;
+  }).join('');
+  return `<div class="bookhead"><div class="n">精灵卡册</div><div class="cnt">${SV.cards.length} / 63</div></div>
+    <div class="grid">${cells}</div>
+    <p style="font-size:11.5px;color:#9a95ab;text-align:center;margin:16px 0 4px;line-height:1.6">每张卡的背面就是顺口溜，点一下会发音。<br>全部 63 张 = 23 声母 + 24 韵母 + 16 整体认读。</p>`;
+}
+function hexA(hex,a){
+  const h=hex.replace('#',''); const n=parseInt(h,16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+
+function petSvg(st){
+  if(st===1){
+    return `<svg width="122" height="136" viewBox="0 0 122 136">
+      <ellipse cx="61" cy="74" rx="43" ry="55" fill="#fffdfb" stroke="#cabdf1" stroke-width="3"/>
+      <ellipse cx="47" cy="56" rx="9" ry="12" fill="#f1ecff"/>
+      <ellipse cx="74" cy="92" rx="7" ry="9" fill="#f1ecff"/>
+      <ellipse cx="55" cy="105" rx="6" ry="8" fill="#f1ecff"/>
+      <circle cx="67" cy="46" r="4" fill="#ded4f9"/>
+    </svg>`;
+  }
+  if(st===2){
+    return `<svg width="130" height="136" viewBox="0 0 130 136">
+      <ellipse cx="65" cy="72" rx="35" ry="40" fill="#ffe6a3"/>
+      <path d="M38 78 q-8 12 2 22 q10 8 18 0z" fill="#ffdb85"/>
+      <circle cx="55" cy="64" r="4.2" fill="#4a3f6b"/><circle cx="75" cy="64" r="4.2" fill="#4a3f6b"/>
+      <path d="M65 71 l9 5 -9 5z" fill="#f0a03a"/>
+      <path d="M48 40 q4-9 9-2 M62 36 q4-9 9-2" stroke="#f5cb7a" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      <path d="M56 110 l-4 9 M74 110 l4 9" stroke="#f0a03a" stroke-width="4" stroke-linecap="round"/>
+    </svg>`;
+  }
+  return `<svg width="140" height="140" viewBox="0 0 140 140">
+      <path d="M34 112 q-10-44 16-58 q24-13 38 6 q12 17 3 38 q-8 16-26 16z" fill="#8fdfc2"/>
+      <path d="M96 78 q22 4 20 26" stroke="#8fdfc2" stroke-width="11" fill="none" stroke-linecap="round"/>
+      <path d="M40 56 l7-12 6 10 7-12 6 10" fill="#5fc9a6"/>
+      <circle cx="78" cy="70" r="4.5" fill="#22463d"/>
+      <path d="M52 106 l-3 9 M70 108 l2 8" stroke="#4fb794" stroke-width="4" stroke-linecap="round"/>
+      <path d="M84 60 q10-6 16 2" stroke="#5fc9a6" stroke-width="4" fill="none" stroke-linecap="round"/>
+    </svg>`;
+}
+
+function renderPet(){
+  const st=petStage();
+  const name=['一颗蛋','小拼拼','飞行拼拼'][st-1];
+  const s=totalStars();
+  const next = st===1?30: st===2?80:100;
+  const from = st===1?0: st===2?30:80;
+  const pct=Math.min(100, Math.round((s-from)/(next-from)*100));
+  const played=Object.keys(SV.levels).length;
+  return `<div class="petwrap">
+      <div class="pet">${petSvg(st)}</div>
+      <div class="petstage">${name}</div>
+      <div class="petsub">${st<3?`再攒 ${Math.max(0,next-s)} 颗星就能进化`:'已经是最厉害的形态啦'}</div>
+      <div class="prog"><i style="width:${st>=3?100:pct}%"></i></div>
+      <div class="progtip"><span>${s} 颗星</span><span>${st>=3?'MAX':next+' 颗星'}</span></div>
+      <div class="stats">
+        <div class="stat"><b>${played}</b><span>通关次数</span></div>
+        <div class="stat"><b>${SV.cards.length}</b><span>精灵卡</span></div>
+        <div class="stat"><b>${totalStars()}</b><span>星星</span></div>
+      </div>
+      <p style="font-size:12px;color:#8b85a0;line-height:1.8;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;text-align:left">
+        <b>没有“消费”这个动作。</b>星星只累计、不扣除，也不卖东西——进化到 30 / 80 颗星自动触发，奖励动画直接复用项目里已有的四声曲线、b d p q 左右手、ü 两点飞走、介母落位四幕。
+      </p>
+    </div>`;
+}
+
+function renderSheet(){
+  const g=S.sheet;
+  const card=ALL_CARDS.find(c=>c.g===g);
+  const mn=MNEMONIC[g]||'先听一遍，再自己读一遍。';
+  const type = ['zhi','chi','shi','ri','zi','ci','si','yi','wu','yu','ye','yue','yuan','yin','yun','ying'].includes(g)?'整体认读音节'
+             : ['a','o','e','i','u','ü','ai','ei','ui','ao','ou','iu','ie','üe','er','an','en','in','un','ün','ang','eng','ing','ong'].includes(g)?'韵母':'声母';
+  return `<div class="sheet" data-act="closesheet"><div class="inner">
+      <div class="type">${type} · 第 ${card?card.planet:1} 星球</div>
+      <div class="g">${g}</div>
+      <div class="mn">${mn}</div>
+      <div class="btnrow" style="margin-top:0">
+        <button class="btn ghost" data-act="playsheet" data-g="${g}">听一听</button>
+        <button class="btn primary" data-act="closesheet">收好</button>
+      </div>
+    </div></div>`;
+}
+
+/* ---------------- 交互 ---------------- */
+function bindOpts(){}
+
+app.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');
+  if(!el) return;
+  const act=el.dataset.act;
+  if(act==='reset'){ SV={levels:{},cards:[],stars:0}; save(); S.view='map'; render(); toast('进度已清空'); return; }
+  if(act==='planet'){
+    const p=+el.dataset.p;
+    if(!planetUnlocked(p)){ toast('先通关上一颗星球'); return; }
+    S.planet=p;
+    startLevel(p,0);
+    return;
+  }
+  if(act==='play'){ speakQ(); return; }
+  if(act==='opt'){ choose(el); return; }
+  if(act==='back'){ S.view='map'; render(); return; }
+  if(act==='again'){ startLevel(S.planet,S.levelIdx); return; }
+  if(act==='tomap'){ S.view='map'; S.result=null; render(); return; }
+  if(act==='card'){
+    const g=el.dataset.g;
+    if(!SV.cards.includes(g)){
+      if(el.classList.contains('lock')) toast('继续闯关才能收集');
+      return;
+    }
+    S.sheet=g; render();
+    const c=ALL_CARDS.find(x=>x.g===g);
+    if(c) playSyl(g,1);
+    return;
+  }
+  if(act==='closesheet'){ S.sheet=null; render(); return; }
+  if(act==='playsheet'){ playSyl(el.dataset.g,1); return; }
+});
+
+function choose(btn){
+  if(S.locked) return;
+  const q=S.qs[S.qi];
+  const val=btn.dataset.v;
+  const correct=val===q.answer;
+  const hint=document.getElementById('hint');
+
+  if(correct){
+    S.locked=true;
+    btn.classList.add('ok');
+    ding(true);
+    if(q.type!=='tone') playSyl(q.syl||q.answer, q.answerTone||1, q.audioSyl);
+    else playSyl(q.syl, q.tone, q.audioSyl);
+    if(hint) hint.textContent='对啦！';
+    setTimeout(()=>{
+      S.qi++;
+      if(S.qi>=5){ finishLevel(); }
+      else{ S.locked=false; render(); setTimeout(speakQ,180); }
+    }, 900);
+  }else{
+    if(!S.wrongSet[S.qi]) S.wrongSet[S.qi]=true;
+    btn.classList.add('no');
+    ding(false);
+    if(hint) hint.textContent = S.levelIdx===3 ? '不要紧，再听一遍' : '再听一遍，再试一次';
+    setTimeout(()=>{ btn.classList.remove('no'); }, 420);
+    setTimeout(speakQ, 300);
+  }
+}
+
+function finishLevel(){
+  const wrong=Object.keys(S.wrongSet).length;
+  const stars=wrong===0?3:wrong===1?2:1;
+  const key=levelKey(S.planet,S.levelIdx);
+  if(stars>(SV.levels[key]||0)) SV.levels[key]=stars;
+
+  // 掉卡
+  const pl=PLANETS[S.planet-1];
+  const owned=new Set(SV.cards);
+  const unowned=pl.cards.filter(c=>!owned.has(c));
+  let card=null, rare=false;
+  if(unowned.length){
+    card={g:unowned[0], planet:S.planet};
+    SV.cards.push(card.g);
+    SV.rare=SV.rare||[];
+    rare = stars===3;
+    if(rare) SV.rare.push(card.g);
+    SV.stars+=5;
+  }else{
+    SV.stars+=5;
+  }
+  S.result={stars,wrong,card,rare};
+  S.view='result';
+  save(); render();
+}
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest('.nav button');
+  if(!b) return;
+  const v=b.dataset.nav;
+  S.view=v; S.sheet=null; render();
+});
+
+render();
+</script>
+</body>
+</html>

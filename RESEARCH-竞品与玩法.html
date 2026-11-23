@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拼音游戏竞品与玩法调研 · pinyin-pal</title>
+<style>
+  :root{
+    --ink:#1d2330; --body:#3d4557; --muted:#7a8394; --line:#e5e8ef;
+    --bg:#faf9f7; --card:#ffffff; --accent:#6c5ce7; --accent-soft:#efeaff;
+    --green:#0f9d7a; --green-soft:#e6f7f1;
+    --gold:#c98a12; --gold-soft:#fdf4e0;
+    --red:#c0563f; --red-soft:#fbeeea;
+    --blue:#2f6fb3; --blue-soft:#eaf2fb;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--body);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    line-height:1.75; font-size:16px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:56px 28px 96px}
+  header.hero{border-bottom:1px solid var(--line);padding-bottom:36px;margin-bottom:44px}
+  .kicker{font-size:12px;letter-spacing:.18em;color:var(--accent);font-weight:700;text-transform:uppercase}
+  h1{font-size:38px;line-height:1.25;margin:14px 0 12px;color:var(--ink);letter-spacing:-.01em}
+  .sub{font-size:17px;color:var(--muted);max-width:760px}
+  .meta{margin-top:22px;font-size:13px;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap}
+  .meta b{color:var(--ink);font-weight:600}
+  h2{font-size:25px;margin:64px 0 8px;color:var(--ink);letter-spacing:-.01em}
+  h2 .num{color:var(--accent);font-size:14px;font-weight:700;letter-spacing:.1em;display:block;margin-bottom:6px}
+  h3{font-size:18px;margin:34px 0 10px;color:var(--ink)}
+  h4{font-size:15px;margin:22px 0 6px;color:var(--ink)}
+  p{margin:10px 0}
+  .lead{font-size:17px;color:var(--body)}
+  .rule{height:1px;background:var(--line);margin:26px 0}
+  /* 结论卡 */
+  .verdict{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 28px;margin:26px 0;box-shadow:0 1px 2px rgba(20,25,40,.03)}
+  .verdict .tag{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:3px 10px;border-radius:99px;letter-spacing:.04em}
+  .verdict h3{margin:12px 0 6px;font-size:20px}
+  .verdict ol{margin:12px 0 0;padding-left:22px}
+  .verdict li{margin:7px 0}
+  /* 表格 */
+  .tablewrap{overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:860px}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f4f3f0;color:var(--ink);font-weight:650;font-size:13px;letter-spacing:.02em;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td strong{color:var(--ink);font-weight:650}
+  .cell-sub{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  .pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--muted);margin:1px 2px 1px 0;white-space:nowrap}
+  .pill.g{color:var(--green);border-color:#bfe6da;background:var(--green-soft)}
+  .pill.r{color:var(--red);border-color:#f0d2c9;background:var(--red-soft)}
+  .pill.b{color:var(--blue);border-color:#cfe0f2;background:var(--blue-soft)}
+  .pill.a{color:var(--accent);border-color:#d9d0ff;background:var(--accent-soft)}
+  /* 网格卡 */
+  .grid{display:grid;gap:16px;margin:22px 0}
+  .grid.two{grid-template-columns:repeat(2,1fr)}
+  .grid.three{grid-template-columns:repeat(3,1fr)}
+  .grid.five{grid-template-columns:repeat(5,1fr)}
+  @media(max-width:860px){.grid.two,.grid.three,.grid.five{grid-template-columns:1fr}}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+  .box h4{margin:0 0 6px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .box p{margin:6px 0;font-size:14px}
+  .box .idx{width:22px;height:22px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
+  .box.green .idx{background:var(--green-soft);color:var(--green)}
+  .box.red .idx{background:var(--red-soft);color:var(--red)}
+  .box.gold .idx{background:var(--gold-soft);color:var(--gold)}
+  /* 引用 */
+  blockquote{margin:18px 0;padding:14px 18px;border-left:3px solid var(--accent);background:#fff;border-radius:0 10px 10px 0;font-size:14.5px;color:var(--body)}
+  blockquote cite{display:block;margin-top:6px;font-style:normal;font-size:12px;color:var(--muted)}
+  /* 流程图 */
+  .flow{display:flex;align-items:stretch;gap:0;margin:24px 0;flex-wrap:wrap}
+  .flow .step{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 6px 12px 0;position:relative}
+  .flow .step b{display:block;color:var(--ink);font-size:14px}
+  .flow .step span{font-size:12.5px;color:var(--muted);display:block;margin-top:3px;line-height:1.55}
+  .flow .step .n{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.1em}
+  /* 代码/映射 */
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;background:#f2f1ee;padding:1px 5px;border-radius:4px;color:#5a4b8a}
+  pre{background:#1f2330;color:#e8e6f0;padding:16px 18px;border-radius:10px;overflow-x:auto;font-size:12.5px;line-height:1.7}
+  pre code{background:none;color:inherit;padding:0}
+  /* 星球路线 */
+  .planets{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:22px 0}
+  @media(max-width:860px){.planets{grid-template-columns:repeat(2,1fr)}}
+  .planet{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;position:relative;overflow:hidden}
+  .planet .dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;margin-bottom:8px}
+  .planet b{font-size:14px;color:var(--ink);display:block}
+  .planet span{font-size:12px;color:var(--muted);display:block;margin-top:2px;line-height:1.5}
+  .planet em{font-style:normal;font-size:11px;color:var(--accent);display:block;margin-top:8px}
+  /* 卡牌示意 */
+  .cards-demo{display:flex;gap:14px;flex-wrap:wrap;margin:22px 0}
+  .pcard{width:120px;height:168px;border-radius:14px;background:linear-gradient(160deg,#fff,#f6f3ff);border:1px solid #e2dcff;box-shadow:0 6px 14px rgba(108,92,231,.10);display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
+  .pcard .glyph{font-size:40px;font-weight:700;color:#4b3fa8;letter-spacing:-.02em}
+  .pcard .tone{position:absolute;top:10px;left:12px;font-size:12px;color:#9b8ee8;font-weight:700}
+  .pcard .name{position:absolute;bottom:12px;font-size:11px;color:#7b7395}
+  .pcard.rare{background:linear-gradient(160deg,#fffdf4,#fdf0cc);border-color:#f0dca6;box-shadow:0 6px 16px rgba(201,138,18,.16)}
+  .pcard.rare .glyph{color:#a9740b}
+  .pcard.locked{background:#f4f3f8;border-style:dashed;border-color:#ddd8ea;box-shadow:none}
+  .pcard.locked .glyph{color:#cfcadd}
+  /* 对比条 */
+  .cmp{margin:18px 0}
+  .cmp .row{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:center;padding:9px 0;border-bottom:1px dashed var(--line)}
+  .cmp .row:last-child{border-bottom:none}
+  .cmp .label{font-size:13.5px;color:var(--ink);font-weight:600}
+  .bar{height:10px;border-radius:99px;background:#f0eeea;overflow:hidden;position:relative}
+  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--accent)}
+  .bar i.g{background:var(--green)} .bar i.gold{background:#e0a92a} .bar i.red{background:#d97757}
+  .cmp .val{font-size:12px;color:var(--muted);margin-left:8px}
+  /* 时间线 */
+  .tl{margin:24px 0;border-left:2px solid var(--line);padding-left:22px}
+  .tl .item{position:relative;margin-bottom:22px}
+  .tl .item::before{content:"";position:absolute;left:-29px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid #fff;box-shadow:0 0 0 2px var(--accent-soft)}
+  .tl .item.p1::before{background:var(--green);box-shadow:0 0 0 2px var(--green-soft)}
+  .tl .item.p2::before{background:var(--gold);box-shadow:0 0 0 2px var(--gold-soft)}
+  .tl h4{margin:0 0 4px}
+  .tl .est{font-size:12px;color:var(--muted);margin-left:8px;font-weight:400}
+  footer{margin-top:70px;padding-top:24px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+  footer a{color:var(--blue);text-decoration:none;word-break:break-all}
+  .note{font-size:13px;color:var(--muted);margin-top:8px}
+  .hl{background:linear-gradient(transparent 62%, #efeaff 62%);padding:0 1px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">竞品调研 · 玩法设计 · 资源盘点</div>
+  <h1>给 6～7 岁孩子做拼音游戏：竞品怎么打，什么形式好玩，我们用什么做</h1>
+  <p class="sub">基于 <code>F:\project\pinyin-pal</code> 现有代码与素材（Rust + nsh 0.5.1，343 个合法音节、1435 个离线音频、23 条顺口溜、4 幕原生动画）评估可行玩法，给出可直接开工的方案。</p>
+  <div class="meta">
+    <span>调研时间 <b>2026-11-23</b></span>
+    <span>竞品样本 <b>10 款国内 + 3 款海外</b></span>
+    <span>目标用户 <b>6～7 岁 · 幼小衔接 / 一年级上</b></span>
+  </div>
+</header>
+
+<div class="verdict">
+  <span class="tag">结论先行</span>
+  <h3>不要做「纯 RPG」，也不要只做「抽卡」——做「一条路 + 八个星球 + 六十三张精灵卡」</h3>
+  <p>竞品差异 90% 在外壳（剧情/角色/美术），内核几乎都是「63 个拼音 + 选择题 + 跟读」。所以拼“更好看的剧情”是烧钱不讨好的路。6～7 岁孩子的真实缺口是：<strong>拼音会读、但拼不利索，没人陪他练</strong>。我们现有引擎恰好能把“任意声母 × 韵母即时合成并发音”这件事做成无限量、不出错的练习池——这是竞品题库做不到的。</p>
+  <ol>
+    <li><strong>骨架用最薄的 RPG</strong>：一条主线、8 个星球、48 关，每关 90 秒。不做剧情文本（孩子不识字，剧情是给家长看的）。</li>
+    <li><strong>血肉用卡牌收集</strong>：63 个拼音 = 63 张精灵卡，答对掉落、连对出闪卡，卡片背面就是现成的顺口溜，点一下即发音。国内拼音赛道这块基本空白。</li>
+    <li><strong>星星要有出口</strong>：重复卡换成星星，喂一只「拼拼」进化三阶段，进化时播放现有 4 幕动画当奖励——零新增美术成本。</li>
+    <li><strong>失败必须可恢复</strong>：无倒计时、无扣星、无排行榜、无抽卡概率。这是家长最敏感的三件事，也是我们「离线 / 无广告 / 无内购」能打的地方。</li>
+  </ol>
+</div>
+
+<h2><span class="num">01</span>竞品全景：两条路线，一个空位</h2>
+<p class="lead">把 10 款国内拼音产品和 3 款海外标杆按“外壳强度 × 学习密度”摆开，会看到很清晰的两极，以及中间一块没人占的位置。</p>
+
+<div class="tablewrap">
+<table>
+<thead>
+<tr><th>产品</th><th>形式 / 外壳</th><th>核心机制</th><th>强项</th><th>短板</th><th>价格</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>洪恩拼音拼读</strong><span class="cell-sub">3–8 岁，赛道第一梯队</span></td>
+  <td>3D 动画 + 小游戏合集<span class="cell-sub">玩 / 认 / 调 / 说 / 练 / 写 九环节</span></td>
+  <td>63 拼音 + 401 组合，800+ 互动小游戏，88 首原创儿歌，语音评测</td>
+  <td><span class="pill g">美术最强</span><span class="pill g">内容量最大</span></td>
+  <td><span class="pill r">跟读判分形同虚设</span><span class="pill r">复习随机、无闭环</span></td>
+  <td>188 永久<br><span class="cell-sub">68 / 3 个月</span></td>
+</tr>
+<tr>
+  <td><strong>悟空拼音</strong><span class="cell-sub">西游 IP，最像“游戏”</span></td>
+  <td>13 章 × 3 节剧情闯关<span class="cell-sub">一座小岛，章内 3–5 个字母</span></td>
+  <td>动画教发音写法 → 捉萤火虫（找字母）→ 拼读任务 → 同步练习</td>
+  <td><span class="pill g">RPG 外壳最完整</span><span class="pill g">单课时间短</span><span class="pill g">可投电视</span></td>
+  <td><span class="pill r">每天锁 1 课，不能跳</span><span class="pill r">练习会超纲</span><span class="pill r">无口型</span></td>
+  <td>68 / 3 年</td>
+</tr>
+<tr>
+  <td><strong>麦田拼音</strong><span class="cell-sub">199 元档，讲练结合</span></td>
+  <td>小岛 + 两艘飞船<span class="cell-sub">18 单元 81 课时 126 个游戏</span></td>
+  <td>字母舞台表演式教学 + 词语卡拼读 + 跟读让猴子爬树（音量驱动）</td>
+  <td><span class="pill g">讲练交替，参与度高</span><span class="pill g">有拼音字典/字卡</span></td>
+  <td><span class="pill r">答错不解析</span><span class="pill r">界面呆板</span><span class="pill r">9 分钟才学 1 个字母</span></td>
+  <td>199</td>
+</tr>
+<tr>
+  <td><strong>兔小贝拼音</strong><span class="cell-sub">双兔救公主</span></td>
+  <td>完整闯关叙事<span class="cell-sub">与悟空高度同构</span></td>
+  <td>知识点、题型、架构与悟空雷同，换皮换剧情</td>
+  <td><span class="pill g">便宜</span><span class="pill g">故事吸引力强</span></td>
+  <td><span class="pill r">同质化</span><span class="pill r">无拼读环节</span></td>
+  <td>58–98</td>
+</tr>
+<tr>
+  <td><strong>宝宝巴士拼音</strong><span class="cell-sub">低龄游戏化代表</span></td>
+  <td>游戏化六路径<span class="cell-sub">认形 / 正音 / 标调 / 跟读 / 拼合 / 书写</span></td>
+  <td>同一个拼音在多个不同游戏场景里反复出现，靠重复次数记忆</td>
+  <td><span class="pill g">重复设计最科学</span><span class="pill g">孩子自驱</span></td>
+  <td><span class="pill r">游戏占比过高，学被玩盖过</span></td>
+  <td>订阅</td>
+</tr>
+<tr>
+  <td><strong>2kids 学拼音</strong><span class="cell-sub">纯工具派</span></td>
+  <td>先学后玩，两段式<span class="cell-sub">无剧情</span></td>
+  <td>跟读判分严格，拼读要求高，练习题量大</td>
+  <td><span class="pill g">判分最严，少数可信</span><span class="pill g">单字母耗时最短</span></td>
+  <td><span class="pill r">画风幼稚</span><span class="pill r">趣味性最弱</span></td>
+  <td>128</td>
+</tr>
+<tr>
+  <td><strong>猫小帅拼音</strong><span class="cell-sub">模块化</span></td>
+  <td>认形 / 读音 / 写法 / 拼读 / 巩固 五模块</td>
+  <td>600+ 组合，50+ 种原创互动（声调小车、字母描红）</td>
+  <td><span class="pill g">模块清晰好定位</span><span class="pill g">游戏形式有原创</span></td>
+  <td><span class="pill r">深度一般</span></td>
+  <td>68 起</td>
+</tr>
+<tr>
+  <td><strong>叫叫拼音</strong><span class="cell-sub">真人出镜</span></td>
+  <td>真人视频课 + 大闯关 + 点读机</td>
+  <td>真人讲解发音 → 金话筒朗读 → 名词图片选择 → 儿歌跟读</td>
+  <td><span class="pill g">唯一真人教学，仪式感强</span><span class="pill g">送实体礼盒</span></td>
+  <td><span class="pill r">金话筒只录不评分</span></td>
+  <td>129</td>
+</tr>
+<tr>
+  <td><strong>小舵手拼音</strong><span class="cell-sub">线上课 + 实体学具</span></td>
+  <td>60 天课程 + 拼音礼盒</td>
+  <td>拼音转盘、63 张拼音卡、拍苍蝇桌游、挂图、描红</td>
+  <td><span class="pill g">线下亲子场景最强</span><span class="pill g">学具卖点</span></td>
+  <td><span class="pill r">线上产品本身很轻</span></td>
+  <td>99–109</td>
+</tr>
+<tr>
+  <td><strong>古古识字</strong><span class="cell-sub">反游戏化路线</span></td>
+  <td>0 游戏纯学 + 字源动画</td>
+  <td>识字与拼音同步教，艾宾浩斯复习，1:1 对标人教教材</td>
+  <td><span class="pill g">效率与口碑最好</span><span class="pill g">家长信任</span></td>
+  <td><span class="pill r">孩子不爱，需家长督</span></td>
+  <td>158 / 3 年</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<h3>海外三个值得拆的参照</h3>
+<div class="grid three">
+  <div class="box">
+    <h4><span class="idx">A</span>Teach Your Monster to Read</h4>
+    <p><b>结构最该抄的一个。</b>8 座岛，每岛 4 个字母；4 个小游戏轮换同一个目标（赶羊 / 搭飞船 / 跑酷 / 跳荷叶）；孩子先捏一只自己的怪物——情感绑定——再用星星给它买装扮。游戏自适应：错得多的字母出现频率更高。</p>
+    <p class="note">BAFTA 提名 · Usborne 基金会 · 与 Roehampton 大学共研</p>
+  </div>
+  <div class="box">
+    <h4><span class="idx">B</span>Duolingo ABC / Khan Academy Kids</h4>
+    <p>低龄路径设计范式：<b>一屏一个动作</b>、没有失败态、没有文字指令，全部靠语音和图形提示。对 6 岁不识字的孩子，这一条是硬要求。</p>
+  </div>
+  <div class="box">
+    <h4><span class="idx">C</span>Prodigy Math</h4>
+    <p>RPG 外壳拉练习量的最强证明，也提供了反面教材：被家长与教師长期批评「游戏占比过高、学习被稀释」。<b>外壳可以厚，但每 30 秒必须有一次真实作答。</b></p>
+  </div>
+</div>
+
+<h3>把 13 个样本收敛成 5 种玩法原型</h3>
+<div class="tablewrap">
+<table style="min-width:780px">
+<thead><tr><th>原型</th><th>代表</th><th>成本</th><th>驱动力</th><th>风险</th><th>适合我们？</th></tr></thead>
+<tbody>
+<tr><td><strong>剧情闯关 RPG</strong></td><td>悟空、兔小贝、TYMTR</td><td><span class="pill r">高</span><span class="cell-sub">剧情/角色/关卡美术</span></td><td>代入感、想知道后面</td><td>剧情文本对不识字儿童无效；做浅了像换皮</td><td>只借“地图 + 角色”，不做剧情</td></tr>
+<tr><td><strong>小游戏合集</strong></td><td>洪恩、麦田、猫小帅</td><td><span class="pill b">中</span><span class="cell-sub">每个玩法独立开发</span></td><td>新鲜感</td><td>玩法与知识点脱钩，孩子只挑好玩的</td><td>作为关卡内的题型变化，不做独立入口</td></tr>
+<tr><td><strong>纯学 + 复习算法</strong></td><td>古古识字、2kids</td><td><span class="pill g">低</span></td><td>进步可见</td><td>孩子抗拒，靠家长推</td><td>作为“家长报告”的内核</td></tr>
+<tr><td><strong>实体桌游 / 卡片</strong></td><td>小舵手、麦田卡</td><td><span class="pill b">中</span><span class="cell-sub">印刷 + 设计</span></td><td>亲子陪伴</td><td>线上做不了，只能做衍生</td><td>同一套卡数据导出可打印 PDF</td></tr>
+<tr><td><strong>收集养成</strong></td><td>国内拼音赛道<span class="hl">基本空白</span></td><td><span class="pill g">低</span><span class="cell-sub">复用现有字母/音频</span></td><td>集齐欲、养成牵挂</td><td>单独用会“收集疲劳”，卡没用处</td><td><b>主推，但必须挂在地图推进上</b></td></tr>
+</tbody>
+</table>
+</div>
+
+<blockquote>
+“有的软件奖励做得太游戏化，孩子光顾着收金币换装扮，学拼音本身反倒成了次要任务。”<br>
+“每做一道题就弹出一个游戏广告……做到第三题时，孩子眼睛直勾勾地盯着屏幕下方的游戏图标。”<br>
+“在‘说’环节，即使孩子发音不对，系统也会提示‘正确，过关’。”
+<cite>—— 家长实测与测评文中的三类高频抱怨（广告、奖励盖过学习、判分不可信）</cite>
+</blockquote>
+
+<h2><span class="num">02</span>6～7 岁的硬约束：先别谈好玩，先别踩雷</h2>
+<p class="lead">这个年龄段的设计约束不是“审美问题”，是会直接决定产品能不能用的功能问题。以下 7 条来自儿童认知规律与上面的家长实测，建议直接写成验收清单。</p>
+
+<div class="grid two">
+  <div class="box red"><h4><span class="idx">1</span>不识字 → 题目不能靠读</h4><p>孩子认识的字可能不到 100 个。所有题干必须<b>语音播报 + 图形</b>，不能出现“请选择正确的韵母”这种文字指令。现有 <code>QuestionKind::prompt()</code> 的文字提示在游戏模式里要改成喇叭按钮。</p></div>
+  <div class="box red"><h4><span class="idx">2</span>注意力 5～10 分钟</h4><p>一关 5 题 ≈ 90 秒，一天 2～3 关收工。不要做 15 分钟的长关卡；结束要“意犹未尽”，不要“终于完了”。</p></div>
+  <div class="box red"><h4><span class="idx">3</span>工作记忆 5±2</h4><p>同屏选项 4 个是上限。声母 23 个不要一屏铺完（现有拼读页是 4 行 × 6 列，游戏里应改为一次只呈现 4～6 个）。</p></div>
+  <div class="box red"><h4><span class="idx">4</span>怕挫败、但好胜</h4><p>失败要可恢复：无倒计时、无扣星、无“Game Over”，只有“再来一次本关”。星级只加不减。</p></div>
+  <div class="box red"><h4><span class="idx">5</span>手指精细动作差</h4><p>点击目标 ≥ 56～64dp，间距 ≥ 12dp，不做拖拽和长按（拖拽对 6 岁是额外认知负担）。</p></div>
+  <div class="box red"><h4><span class="idx">6</span>视力保护</h4><p>低饱和、无闪烁、无自动连播。现有浅紫 + 白卡的低饱和风格是对的，别为了“游戏感”换成高饱和霓虹色。</p></div>
+  <div class="box red"><h4><span class="idx">7</span>家长在场感</h4><p>家长真正买的是“我今天能看见他学了什么”。一页纸报告胜过一百个动画。不要排行榜（引发焦虑与攀比）。</p></div>
+  <div class="box green"><h4><span class="idx">✓</span>顺手能拿的合规优势</h4><p>离线、无广告、无内购、无账号、无社交、无数据上传。这五条在竞品里几乎无人同时做到，且写进商店页就是转化率。</p></div>
+</div>
+
+<h2><span class="num">03</span>卡片还是 RPG：这是个假问题</h2>
+<p class="lead">两者不是替代关系，是<b>两种不同时间尺度</b>的驱动力。RPG 回答“我明天为什么还来”，卡牌回答“我今天这 3 分钟得到了什么”。混着用才成立，单用任何一个都会塌。</p>
+
+<div class="tablewrap">
+<table style="min-width:820px">
+<thead><tr><th>方案</th><th>开发成本</th><th>次日回访</th><th>学习密度</th><th>主要风险</th><th>判断</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>纯 RPG</strong><span class="cell-sub">剧情 + 角色 + 多场景</span></td>
+  <td><span class="pill r">高</span> 剧情脚本、角色动画、场景美术，单人 2～3 个月起</td>
+  <td><span class="pill g">强</span></td>
+  <td><span class="pill b">中</span></td>
+  <td>孩子不识字，剧情看不懂 → 投入全打在家长身上；做浅了被说“换皮悟空”</td>
+  <td>不做</td>
+</tr>
+<tr>
+  <td><strong>纯卡牌收集</strong><span class="cell-sub">图鉴 + 掉落</span></td>
+  <td><span class="pill g">低</span> 复用现成字母与音频，1 周内可出</td>
+  <td><span class="pill r">弱</span> 集齐就结束</td>
+  <td><span class="pill g">高</span></td>
+  <td>抽卡概率 = 赌博感，家长反感；卡片没有用途 → 收集疲劳</td>
+  <td>只做内核</td>
+</tr>
+<tr style="background:#fcfbff">
+  <td><strong>薄 RPG + 卡牌 + 养成</strong><span class="cell-sub">一条路 / 八个星球 / 63 张卡 / 一只宠物</span></td>
+  <td><span class="pill g">低-中</span> 无剧情文本、无新美术，复用现有 4 幕动画做奖励</td>
+  <td><span class="pill g">强</span> 下一颗星球永远亮着</td>
+  <td><span class="pill g">高</span> 每 30 秒一次真实作答</td>
+  <td>需要克制：不做抽卡、不做排行榜、不做限时</td>
+  <td><b>采用</b></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<h3>为什么这个组合对我们特别划算</h3>
+<div class="cmp">
+  <div class="row"><div class="label">新增美术资产</div><div><div class="bar"><i class="g" style="width:12%"></i></div><span class="val">≈ 0（星球用 CSS/SVG 绘制，宠物 3 个形态用几何图形，奖励动画复用现有 4 幕）</span></div></div>
+  <div class="row"><div class="label">新增音频资产</div><div><div class="bar"><i class="g" style="width:8%"></i></div><span class="val">≈ 0（1435 条现成音频覆盖全部声韵母与四声）</span></div></div>
+  <div class="row"><div class="label">新增内容（题目）</div><div><div class="bar"><i class="g" style="width:10%"></i></div><span class="val">≈ 0（quiz 引擎 + 合法音节矩阵可生成无限题）</span></div></div>
+  <div class="row"><div class="label">新增代码量</div><div><div class="bar" style="width:22%"><i style="width:100%;background:#6c5ce7"></i></div><span class="val">约 1000～1300 行（状态机 + 3 个视图 + 存档）</span></div></div>
+  <div class="row"><div class="label">相对竞品护城河</div><div><div class="bar"><i class="gold" style="width:78%"></i></div><span class="val">拼读引擎（实时合成、非法组合置灰）+ 真人音频 + 完全离线</span></div></div>
+</div>
+
+<h2><span class="num">04</span>具体设计：拼音星球</h2>
+<p class="lead">8 个星球按人教版的拼音教学顺序排，一颗星球 6 关，一关 5 题。孩子看到的是一条永远有下一站的路。</p>
+
+<div class="planets">
+  <div class="planet"><div class="dot" style="background:#6c5ce7">1</div><b>单韵母草原</b><span>a o e i u ü + 四声</span><em>6 关 · 掉落 6 张</em></div>
+  <div class="planet"><div class="dot" style="background:#8e7bf0">2</div><b>双唇森林</b><span>b p m f</span><em>6 关 · 掉落 4 张</em></div>
+  <div class="planet"><div class="dot" style="background:#0f9d7a">3</div><b>舌尖山谷</b><span>d t n l</span><em>6 关 · 掉落 4 张</em></div>
+  <div class="planet"><div class="dot" style="background:#2f9e8f">4</div><b>舌根山洞</b><span>g k h · j q x</span><em>6 关 · 掉落 6 张</em></div>
+  <div class="planet"><div class="dot" style="background:#c98a12">5</div><b>平翘舌城</b><span>zh ch sh r · z c s · y w</span><em>6 关 · 掉落 9 张</em></div>
+  <div class="planet"><div class="dot" style="background:#d9822b">6</div><b>复韵母海湾</b><span>ai ei ui ao ou iu ie üe er</span><em>6 关 · 掉落 9 张</em></div>
+  <div class="planet"><div class="dot" style="background:#2f6fb3">7</div><b>鼻韵母星空</b><span>an en in un ün · ang eng ing ong</span><em>6 关 · 掉落 9 张</em></div>
+  <div class="planet"><div class="dot" style="background:#7a5bd6">8</div><b>整体认读神殿</b><span>zhi chi shi ri … ying（16 个）</span><em>6 关 · 掉落 16 张</em></div>
+</div>
+
+<h3>一关 90 秒里的循环</h3>
+<div class="flow">
+  <div class="step"><div class="n">0–5s</div><b>星球动画</b><span>宠物「拼拼」跳进关卡，喇叭自动播报本关主题</span></div>
+  <div class="step"><div class="n">5–70s</div><b>5 道题</b><span>3 道本星球题型 + 1 道易混对比（b/p、an/ang）+ 1 道拼读合成（b + ā = ?）</span></div>
+  <div class="step"><div class="n">即时</div><b>作答反馈</b><span>对：卡片飞入、真人音重播；错：不算错，给一次“再听一遍”</span></div>
+  <div class="step"><div class="n">70–90s</div><b>结算</b><span>1～3 星（只加不减）+ 掉落 1 张精灵卡 + 返回地图</span></div>
+</div>
+
+<h3>63 张精灵卡 = 63 个拼音</h3>
+<p>这是整个设计里最“省”的一环：卡面内容全部是现成的。字母来自 <code>pinyin_data.rs</code>，背面口诀来自 <code>mnemonics.rs</code>（23 条声母顺口溜），点一下发音走 <code>audio_tone::speak()</code>，闪卡边框用 CSS。</p>
+
+<div class="cards-demo">
+  <div class="pcard"><span class="tone">声母</span><div class="glyph">b</div><div class="name">广播精灵</div></div>
+  <div class="pcard"><span class="tone">韵母</span><div class="glyph">ang</div><div class="name">昂头精灵</div></div>
+  <div class="pcard rare"><span class="tone">闪卡</span><div class="glyph">ü</div><div class="name">小鱼精灵</div></div>
+  <div class="pcard locked"><span class="tone">未获得</span><div class="glyph">?</div><div class="name">继续闯关</div></div>
+</div>
+
+<div class="grid two">
+  <div class="box"><h4><span class="idx">1</span>掉落规则（不做抽卡）</h4><p>答对题目 → 本星球卡池里<b>必然</b>掉一张未拥有的卡；3 星通关 → 该卡升级为闪卡；重复卡自动折算 5 颗星星。<b>没有概率、没有付费、没有限时池</b>——家长一眼能看懂。</p></div>
+  <div class="box"><h4><span class="idx">2</span>星星的出口：拼拼</h4><p>一只小灯笼形宠物，三阶段：蛋 → 幼崽 → 飞行形态。喂星星进化；每次进化解锁一幕<b>现成动画</b>（四声曲线 / 左手右手 b d p q / ü 两点飞走 / 介母落位）当奖励演出。动画原本是“教学页”，现在变成“奖励”，一份资产两次用。</p></div>
+  <div class="box"><h4><span class="idx">3</span>BOSS：调皮的声调精灵</h4><p>每星球第 6 关。三颗心，答错掉一颗，掉光重打本关。<b>不用倒计时</b>——用血量制造紧张感，但不惩罚手速。题目固定考本星球最易混的 5 组。</p></div>
+  <div class="box"><h4><span class="idx">4</span>复习：迷路的小精灵</h4><p>答错的音节变成“迷路精灵”蹲在地图边上，再答对 2 次就回家。直接映射现有 <code>WrongBook</code>（答对减计数、归零移出），逻辑已写好，只需换皮。</p></div>
+</div>
+
+<h3>家长那一页</h3>
+<p>一句话结论 + 三个数字：<b>本周来了 4 天 / 一共 32 分钟 / 学会 18 个音节</b>，下面两个易错点（b–p 分不清、an–ang 分不清）。不做排行榜，不做分享海报，不做“您的孩子落后于 87% 的同龄人”。</p>
+
+<h2><span class="num">05</span>盘点：现有资源够不够</h2>
+<p class="lead">结论是够，而且比想象中富余。下面是把每个设计模块对应到现有代码/资产的映射表——开工时按这张表接就行。</p>
+
+<div class="tablewrap">
+<table style="min-width:840px">
+<thead><tr><th>游戏模块</th><th>复用的现有资源</th><th>位置</th><th>改动量</th></tr></thead>
+<tbody>
+<tr><td><strong>关卡出题</strong></td><td>5 种题型（听音选字 / 看字选拼音 / 听音选声母 / 听音选韵母 / 听音选声调）、音近形近干扰项</td><td><code>src/quiz.rs</code> · <code>new_question()</code></td><td><span class="pill g">零改动</span> 直接调用</td></tr>
+<tr><td><strong>拼读合成题</strong></td><td>合法音节矩阵 + 非法组合置灰 + 三拼支持</td><td><code>src/pinyin.rs</code> · <code>compose()</code> / <code>finals_for()</code></td><td><span class="pill g">零改动</span></td></tr>
+<tr><td><strong>星球分组</strong></td><td>23 声母 / 24 韵母 / 343 音节 / 16 整体认读</td><td><code>src/data/pinyin_data.rs</code></td><td><span class="pill b">少量</span> 加一个 <code>planet_of(syllable)</code></td></tr>
+<tr><td><strong>发音</strong></td><td>1069 条百度真人音频（分声调）+ 366 条 TTS 兜底，全离线 4.2MB</td><td><code>src/audio_tone.rs</code> · <code>speak()</code></td><td><span class="pill g">零改动</span></td></tr>
+<tr><td><strong>卡片背面</strong></td><td>23 条声母顺口溜 + 6 条规则口诀</td><td><code>src/data/mnemonics.rs</code></td><td><span class="pill g">零改动</span></td></tr>
+<tr><td><strong>奖励动画</strong></td><td>四声曲线 / b d p q 左右手 / ü 两点飞走 / 介母落位，nsh 原生 <code>Animated</code> 实现</td><td><code>src/lib.rs</code> · <code>anim_scene_*</code></td><td><span class="pill b">少量</span> 抽成可复用组件</td></tr>
+<tr><td><strong>复习系统</strong></td><td>错题本（答对减计数、归零移出、本地持久化）</td><td><code>load_wrong_book()</code> / <code>save_wrong_book()</code></td><td><span class="pill b">少量</span> 加“迷路精灵”皮肤</td></tr>
+<tr><td><strong>存档</strong></td><td>nsh Storage（已有键值持久化先例）</td><td><code>WRONG_BOOK_KEY</code> 同款写法</td><td><span class="pill b">新增</span> <code>GameSave</code> 结构</td></tr>
+<tr><td><strong>入口</strong></td><td>顶部胶囊页签（拼读 / 查表 / 练习 / 知识 / 动画）</td><td><code>mode_switcher()</code></td><td><span class="pill b">新增</span> 第 6 个页签「冒险」</td></tr>
+<tr><td><strong>美术</strong></td><td>浅紫渐变底 + 白色圆角卡 + 现有图标</td><td><code>assets/bg.png</code> 等</td><td><span class="pill g">零新增</span> 星球/宠物用 SVG 画</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><b>真正缺的只有两样</b>：① 一套「关卡 → 星球 → 星级 → 卡册 → 宠物」的状态机与存档结构；② 地图与卡册这两个新视图。其余全是接线。</p>
+
+<h2><span class="num">06</span>怎么落地：三步走</h2>
+
+<div class="tl">
+  <div class="item">
+    <h4>P0 · 一个星球能通关 <span class="est">≈ 1 个工作单元</span></h4>
+    <p>新增 <code>src/game.rs</code>（状态机 + 存档 + 12 个单元测试）→ 地图视图（8 星球，只开第 1 颗）→ 关卡视图（5 题、3 星、掉落）→ 卡册视图（63 格，锁态灰）。<br>
+    验收：能从头点到尾、杀掉重进进度还在、每关题目不重复出现非法音节。</p>
+  </div>
+  <div class="item p1">
+    <h4>P1 · 八个星球 + 宠物 <span class="est">≈ 2 个工作单元</span></h4>
+    <p>开放全部星球与 63 张卡；重复卡换星星；拼拼三阶段进化 + 复用 4 幕动画；BOSS 关（3 心）；迷路精灵复习。<br>
+    验收：从零到集齐 63 张卡的全流程走通，中途不出现死锁或负星。</p>
+  </div>
+  <div class="item p2">
+    <h4>P2 · 家长页 / 平板 / 衍生 <span class="est">≈ 1～2 个工作单元</span></h4>
+    <p>家长报告页（周频次、时长、掌握音节、易错项）；平板横屏布局；同一套卡数据导出 A4 可打印 PDF（翻翻乐 / 拍苍蝇 / 找朋友三种线下玩法），把线上收集变成线下亲子桌游。</p>
+  </div>
+</div>
+
+<h3>需要主动放弃的东西</h3>
+<div class="grid three">
+  <div class="box red"><h4>不做剧情文本</h4><p>6 岁不识字，剧情只能被跳过。省下的产能全部投到题目质量与反馈手感上。</p></div>
+  <div class="box red"><h4>不做抽卡与付费</h4><p>概率池会立刻把产品拉进“家长防备”的品类。掉率写死、可预期。</p></div>
+  <div class="box red"><h4>不做排行榜与倒计时</h4><p>这两样在 6 岁场景里只产生焦虑，不产生练习量。</p></div>
+</div>
+
+<h3>风险与对策</h3>
+<div class="tablewrap">
+<table style="min-width:760px">
+<thead><tr><th>风险</th><th>表现</th><th>对策</th></tr></thead>
+<tbody>
+<tr><td>游戏盖过学习</td><td>孩子只反复刷已通关的关卡拿卡</td><td>每关必须真实作答才结算；重复刷同一关只掉星星不掉新卡</td></tr>
+<tr><td>收集疲劳</td><td>集到 40 张后动力骤降</td><td>卡片背后挂口诀与发音（有“用”），并用宠物进化做中段目标</td></tr>
+<tr><td>难度错配</td><td>第 5 星球起正确率跌破 50%</td><td>按最近 20 题正确率动态调干扰项：低于 60% 换成异组干扰项</td></tr>
+<tr><td>家长不认“游戏”</td><td>觉得不如刷题</td><td>家长页明写“今天练了 5 个音节、错了 2 个”，把游戏翻译成学习量</td></tr>
+<tr><td>音质/发音争议</td><td>个别音节 TTS 兜底听起来生硬</td><td>游戏模式优先只出有真人音频的音节；TTS 仅作拼读合成题的兜底</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2><span class="num">07</span>一句话回答你的三个问题</h2>
+<div class="grid three">
+  <div class="box gold"><h4><span class="idx">竞品</span>打的是外壳，不是内核</h4><p>洪恩赢在美术与内容量，悟空赢在西游 IP 与闯关结构，古古赢在效率与教材同步。内核（63 拼音 + 选择题）高度同质，我们的机会在“拼读引擎 + 真人音频 + 离线无广告”。</p></div>
+  <div class="box green"><h4><span class="idx">形式</span>薄 RPG 外壳 + 卡牌内核</h4><p>不是二选一。地图负责回访，卡片负责即时获得感，宠物负责给星星一个出口。国内拼音赛道的“收集养成”基本空白，是差异化入口。</p></div>
+  <div class="box"><h4><span class="idx">资源</span>够，只缺一层皮</h4><p>343 音节、1435 条音频、23 条口诀、4 幕动画、5 种题型、错题本全部现成。新增约 1000～1300 行：状态机 + 地图 + 关卡 + 卡册。</p></div>
+</div>
+
+<footer>
+  <p><b>资料来源</b>（均为公开测评与产品页，价格与功能可能随版本变动，落地前建议实测复核）：</p>
+  <p>
+    6 款拼音 App 横评（网易教育）· <a href="https://www.163.com/edu/article/FN9874KL00297VGM.html">163.com/edu/article/FN9874KL00297VGM.html</a><br>
+    悟空/麦田/洪恩三家对比（微信测评）· <a href="http://mp.weixin.qq.com/s?__biz=MzU3Nzc5NTY0OQ==&mid=2247489066&idx=2&sn=b4d83ff93e027b2295b1c3323b131521">mp.weixin.qq.com（星庐课评）</a><br>
+    叫叫/小舵手/猫小帅等 8 家课程盘点（含实体学具清单）· <a href="http://mp.weixin.qq.com/s?__biz=MzI4NjQ3NTkwMw==&mid=2247486145&idx=1&sn=977a66da377d56a4d45ca94642eb05f5">mp.weixin.qq.com（安安妈妈）</a><br>
+    家长踩坑记录（广告、奖励盖过学习、发音口音）· <a href="http://www.sng.cn/yf/cs/667561.html">sng.cn/yf/cs/667561.html</a>、<a href="https://www.163.com/dy/article/E2O3MGET0526DV04.html">163.com（七天掌握拼音）</a><br>
+    Teach Your Monster to Read 官方游戏指南与结构说明 · <a href="https://www.teachyourmonster.org/wp-content/uploads/2025/12/TYMTR1-gameguide-2025_KL_01.pdf">teachyourmonster.org（PDF）</a><br>
+    拼音线下玩法（翻翻乐 / 拍苍蝇 / 找朋友 / 声调操 / 大转盘）· <a href="http://www.sng.cn/sjyx/qtyx/591260.html">sng.cn/sjyx/qtyx/591260.html</a><br>
+    教育游戏机制设计（关卡拆分、心流、成就系统避坑）· <a href="https://m.sng.cn/cy/cp/768039.html">sng.cn/cy/cp/768039.html</a>
+  </p>
+  <p style="margin-top:14px">本文档与项目内 <code>RESEARCH-儿童拼音练习方式.html</code>（开源项目调研）、<code>RESEARCH-拼音动画选题.html</code>（动画选题）互补，不重复。</p>
+</footer>
+
+</div>
+</body>
+</html>
