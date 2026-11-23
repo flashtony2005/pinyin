@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>拼音拼读 · GitHub 开源方案调研与借鉴建议</title>
+<style>
+  :root{
+    --bg:#F7F6F3; --card:#FFFFFF; --ink:#2C2C2A; --muted:#6E6C64;
+    --line:#E8E6DF; --purple:#6750F5; --purple-soft:#EEEDFE;
+    --green:#158A54; --green-soft:#E6F6EC; --amber:#B5730A; --amber-soft:#FDF1DF;
+    --gray:#5F5E5A; --gray-soft:#F1EFE8; --blue:#2C6FE0; --blue-soft:#E8F0FE;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.7;padding:32px 20px 80px}
+  .wrap{max-width:960px;margin:0 auto}
+  header{margin-bottom:36px}
+  .kicker{font-size:13px;color:var(--purple);font-weight:600;letter-spacing:.06em}
+  h1{font-size:30px;line-height:1.3;margin:8px 0 12px}
+  .sub{color:var(--muted);font-size:15px;max-width:720px}
+  .meta{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+  .meta span{font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:4px 12px;color:var(--muted)}
+  section{margin:36px 0}
+  h2{font-size:20px;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+  h2 .num{font-size:13px;color:#fff;background:var(--purple);width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:600}
+  .lede{color:var(--muted);font-size:14px;margin:8px 0 18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden;font-size:13px;border:1px solid var(--line)}
+  th,td{padding:11px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#FAF9F6;color:var(--muted);font-weight:600;font-size:12px;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td.name{font-weight:600;white-space:nowrap}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;white-space:nowrap}
+  .t-web{background:var(--blue-soft);color:var(--blue)}
+  .t-native{background:var(--amber-soft);color:var(--amber)}
+  .t-mit{background:var(--green-soft);color:var(--green)}
+  .t-data{background:var(--gray-soft);color:var(--gray)}
+  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .tier{border-radius:14px;padding:18px;border:1px solid var(--line);background:var(--card)}
+  .tier.p0{border-top:4px solid var(--green)}
+  .tier.p1{border-top:4px solid var(--purple)}
+  .tier.p2{border-top:4px solid var(--gray)}
+  .tier h3{font-size:16px;margin-bottom:4px}
+  .tier .why{font-size:12px;color:var(--muted);margin-bottom:14px}
+  .tier ul{list-style:none;display:flex;flex-direction:column;gap:12px}
+  .tier li{font-size:13px;padding-left:16px;position:relative}
+  .tier li::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:50%;background:var(--ink)}
+  .tier li small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+  .swot{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .swot .box{border-radius:14px;padding:18px;border:1px solid var(--line)}
+  .swot h3{font-size:14px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%}
+  .swot ul{padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:6px}
+  .have{background:var(--green-soft);color:var(--green)}
+  .lack{background:var(--amber-soft);color:var(--amber)}
+  .flow{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;position:relative}
+  .step .st{font-size:11px;color:var(--purple);font-weight:600}
+  .step h4{font-size:14px;margin:4px 0 6px}
+  .step p{font-size:12px;color:var(--muted)}
+  .arrow{align-self:center;color:var(--purple);font-size:20px;font-weight:600}
+  .callout{background:var(--purple-soft);border:1px solid #DAD5FB;border-radius:12px;padding:16px 18px;font-size:13.5px;margin-top:18px}
+  .callout b{color:var(--purple)}
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:18px 0}
+  .kpi div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .kpi .n{font-size:24px;font-weight:600;color:var(--purple);line-height:1.1}
+  .kpi .l{font-size:12px;color:var(--muted);margin-top:6px}
+  footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+  footer a{color:var(--blue);text-decoration:none;word-break:break-all}
+  .src{font-size:12.5px;line-height:2}
+  @media(max-width:640px){.swot{grid-template-columns:1fr}h1{font-size:24px}body{padding:20px 14px 60px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">RESEARCH NOTE · 2026-11-17</div>
+  <h1>GitHub 开源方案调研与借鉴建议</h1>
+  <p class="sub">面向当前 Rust + Native Shell 的「拼音拼读」App：调研同类开源项目的功能与 UI 做法，判断哪些能借鉴到本项目，并给出按优先级排序的落地清单。</p>
+  <div class="meta">
+    <span>调研范围：GitHub 拼音学习类项目</span>
+    <span>对照基准：pinyin-pal v0.1.0</span>
+    <span>结论：代码无需重写，缺的是「教学信息层」与「练习闭环」</span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="num">1</span>调研的项目一览</h2>
+  <p class="lede">共筛选 7 个相关项目。它们和本项目的定位并不完全相同——有的偏「打字输入」（成人向），有的偏「闯关游戏」，但各自都有可借鉴的单点。</p>
+  <table>
+    <thead><tr><th>项目</th><th>形态</th><th>核心亮点</th><th>许可</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="name">chen2qu/pinyin</td>
+        <td><span class="tag t-native">跨平台</span></td>
+        <td>最贴近本项目：点声母+韵母拼读；处理 j/q/x/y + ü 的规则、标调规则展示、声母呼读音（b→波）、拼读用短音。迭代 1.4→1.8 都在打磨发音与教学细节。</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td class="name">zxq432/py</td>
+        <td><span class="tag t-web">Web</span></td>
+        <td>「最完整的拼音表」：整张表行/列高亮，每音节 5 个声调 tooltip，独创「拼」分解模式（声母+韵母+全拼连读），支持两拼/三拼与 16 整体认读。数据结构清晰（pyTp.csv / toneMap.json / tones4py.json）。</td>
+        <td><span class="tag t-mit">MIT</span></td>
+      </tr>
+      <tr>
+        <td class="name">Pinyin-LeLe</td>
+        <td><span class="tag t-web">Web</span></td>
+        <td>教学最完整：23 声母/24 韵母/16 整体认读；每个拼音配顺口溜（听广播 b b b）、四声手势图（平/扬/拐/降）、「防混淆发音」——把 b 映射成汉字「波」避免读成英语 bee。AI 助记插画需 Gemini Key。</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td class="name">candy-learn-pinyin</td>
+        <td><span class="tag t-web">Web</span></td>
+        <td>UI 与游戏化参考：马卡龙配色 + 果冻质感 3D 按钮；「听音辨字」小游戏 + 答对彩带；用单层 a/g 字形字体（Nunito）贴合小学规范；本地 MP3 离线；iOS 首次交互解锁音频。</td>
+        <td><span class="tag t-mit">MIT</span></td>
+      </tr>
+      <tr>
+        <td class="name">digglesby/plain-pinyin</td>
+        <td><span class="tag t-web">Web</span></td>
+        <td>交互式拼音表 + 免费 quiz（作者因为「带测验的都要付费」而开源）；每音节配繁/简例字；音频来自 davinfifield 的开源拼音音库。</td>
+        <td><span class="tag t-mit">MIT</span></td>
+      </tr>
+      <tr>
+        <td class="name">PinyinAdventure</td>
+        <td><span class="tag t-web">Web</span></td>
+        <td>体系化学习：闯关分级、艾宾浩斯智能复习、错题本、成就积分、庆祝动画。偏「学习系统」，不是单点工具。</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td class="name">alfredang/hanyupinyinapp</td>
+        <td><span class="tag t-native">原生 iOS</span></td>
+        <td>定位不同——练「拼音打字输入」而非儿童拼读，含速度/准确率打分、简拼速打。仅作 iOS 原生实现参考。</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="kpi">
+    <div><div class="n">7</div><div class="l">相关开源项目</div></div>
+    <div><div class="n">3</div><div class="l">明确 MIT 许可</div></div>
+    <div><div class="n">366</div><div class="l">本项目现成例字映射</div></div>
+    <div><div class="n">1</div><div class="l">最值得立刻补的能力</div></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">2</span>本项目现状：我们强在哪、缺在哪</h2>
+  <p class="lede">先看清家底，避免盲目照搬。真的去抄界面，反而可能丢掉我们已有的优势。</p>
+  <div class="swot">
+    <div class="box">
+      <h3><span class="dot have"></span>已经领先的点（别丢）</h3>
+      <ul>
+        <li><b>全离线真人发音</b>：1069 个百度真人分声调 mp3 + 40 个 TTS 兜底，压缩后仅 4.2 MB。多数同类用系统 TTS 或依赖联网 Gemini Key。</li>
+        <li><b>一屏铺满、无滚动</b>：声母/韵母分行等分高度，移动端体验干净，很多 Web 项目在手机上还要滚动。</li>
+        <li><b>组合合法性过滤</b>：按 343 音节矩阵置灰非法组合（b+ong），教学准确。</li>
+        <li><b>J/Q/X/Y + ü 书写规则</b>：spell() 已正确处理 ju/que/xun 等，逻辑到位。</li>
+        <li><b>真跨端</b>：一套 Rust 出 Android/Web/桌面，Android 已真机验证。</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3><span class="dot lack"></span>真正的缺口</h3>
+      <ul>
+        <li><b>只有拼音、没有意义</b>：拼出 ba 只显示「ba」，没有例字「八」、例词——孩子不知道这个音对应什么。</li>
+        <li><b>缺教学提示</b>：ü 为什么写成 u、声调该标在哪个字母上，代码里有逻辑但用户看不到解释。</li>
+        <li><b>没有记忆锚点</b>：无顺口溜、无字形助记，b/d/p/q 这类易混字母缺辅助。</li>
+        <li><b>没有整体认读类别</b>：16 个整体认读音节散在音节表里，没有作为独立概念呈现。</li>
+        <li><b>只有「学」没有「练」</b>：无听音辨字、无小测，缺少闭环与成就感。</li>
+        <li><b>不支持三拼</b>：jia/gua 等三拼音节当前 compose 直接判为 Invalid。</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout">
+    <b>关键发现：</b>我们项目最大的短板不是 UI，而是「拼出来之后没有信息量」。而且补这个短板的<b>数据已经躺在仓库里</b>——<code>tools/speak_map.json</code> 里有 366 个音节的例字（ba→芭、ma→妈、zhong→中、yi→一），当初是为 TTS 兜底生成的，现在可以直接复用到界面上。这是投入产出比最高的一步。
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">3</span>分层借鉴建议</h2>
+  <p class="lede">按「改动成本 × 教学收益」分三档。建议按顺序推进，每档做完在真机上验证再进入下一档。</p>
+  <div class="grid3">
+    <div class="tier p0">
+      <h3>P0 · 立刻做</h3>
+      <div class="why">数据现成 / 改动极小 / 收益最直接</div>
+      <ul>
+        <li>拼读结果显示例字<small>复用 speak_map.json；注意它是「第一声同音字」，展示时可与当前声调解耦或标注「例字」</small></li>
+        <li>ü 拼写规则提示<small>当选中 j/q/x/y + ü 时，结果卡补一行「ü 遇到 j q x y 写作 u」</small></li>
+        <li>标调规则说明<small>「有 a 找 a，没 a 找 o e，i u 并列标在后」——chen2qu 的做法，一段文案即可</small></li>
+        <li>顺口溜助记<small>声母/韵母卡片点开后显示一句口诀，可先做 23 个声母</small></li>
+      </ul>
+    </div>
+    <div class="tier p1">
+      <h3>P1 · 值得做</h3>
+      <div class="why">中等改动 / 补上「练」的闭环</div>
+      <ul>
+        <li>听音辨字小游戏<small>播放发音，从 4 张例字卡里选正确的——candy / plain-pinyin 的核心玩法</small></li>
+        <li>整体认读独立类别<small>把 16 个 zhi/chi/shi/yi/wu… 单列成一个可点读的分区</small></li>
+        <li>声调手势图<small>用 ↗ ↘ 之类手势替代/补充抽象调号，更贴合低龄儿童——Pinyin-LeLe 做法</small></li>
+        <li>三拼支持<small>jia/gua 等，需扩展 compose 逻辑与音频映射，工作量较大</small></li>
+      </ul>
+    </div>
+    <div class="tier p2">
+      <h3>P2 · 慎做</h3>
+      <div class="why">风格冲突 / 工作量大 / 与定位不符</div>
+      <ul>
+        <li>整体换成马卡龙糖果风<small>当前紫色极简风已成形，用户已反复打磨；大改风格风险高</small></li>
+        <li>果冻按钮 / 全屏彩带动效<small>nsh anim 成本较高，可作为答对反馈的小范围点缀</small></li>
+        <li>整张拼音表 + 行列高亮<small>与「一屏铺满拼读」主交互不同，可能做成第三个页签而非替换</small></li>
+        <li>艾宾浩斯复习 / 错题本 / 成就<small>需要本地持久化，属于「学习系统」范畴，超出轻量工具定位</small></li>
+        <li>AI 助记插画 / AI 老师<small>需联网 + API Key，与本项目「完全离线」的核心优势冲突</small></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">4</span>建议的落地路径</h2>
+  <p class="lede"> suggested sequence — 每一步都应重新打包到小米 8 真机验证后再继续。</p>
+  <div class="flow">
+    <div class="step"><div class="st">STEP 1</div><h4>例字上屏</h4><p>build.rs 编译 speak_map.json → 结果卡显示「b + a = ba · 八」</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="st">STEP 2</div><h4>规则提示</h4><p>ü 书写规则 + 标调规则，用一行浅色提示文字</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="st">STEP 3</div><h4>顺口溜</h4><p>新增 23 条声母口诀数据表，卡片点按展示</p></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="st">STEP 4</div><h4>听音辨字</h4><p>独立「练习」页签，4 选 1 + 答对反馈，形成学练闭环</p></div>
+  </div>
+  <div class="callout">
+    <b>为什么不直接照搬某个项目：</b>它们几乎都是 Web 技术栈（React/Tailwind），代码无法直接用于 Rust + nsh。真正可迁移的是<b>教学设计</b>（例字、口诀、手势、听音辨字玩法）和<b>数据结构</b>（如 zxq432/py 的声调映射表）。本项目在发音质量和离线能力上已经领先，借鉴应聚焦「补齐信息量与练习闭环」，而非推倒重做 UI。
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">5</span>结论</h2>
+  <div class="card" style="font-size:14px">
+    <p>有值得借鉴的，而且不需要改架构。<b>最高优先级是把现成的 366 个例字显示到拼读结果上</b>——这一步改动不到 20 行，却让 App 从「只会读音」变成「能教会孩子这个音是什么字」。其次是补上 ü 与标调规则的文字提示、顺口溜助记。这四个 P0 项做完，教学完整度就能追上甚至超过多数同类开源项目。</p>
+    <p style="margin-top:12px">中期可以做「听音辨字」小游戏和整体认读分区，把「学」补成「学+练」。糖果风换肤、AI 插画、错题本这类不建议做——前者与已打磨的 UI 冲突，后者与「完全离线」定位冲突。若后续要支持三拼或整张拼音表，可作为新的页签扩展，不影响现有主交互。</p>
+  </div>
+</section>
+
+<footer>
+  <p style="margin-bottom:8px"><b>数据来源（GitHub）：</b></p>
+  <p class="src">
+    chen2qu/pinyin · github.com/chen2qu/pinyin<br>
+    zxq432/py · github.com/zxq432/py<br>
+    yanghanxing/Pinyin-LeLe · github.com/yanghanxing/Pinyin-LeLe<br>
+    whtiehack/candy-learn-pinyin · github.com/whtiehack/candy-learn-pinyin<br>
+    digglesby/plain-pinyin · github.com/digglesby/plain-pinyin<br>
+    tabortao/PinyinAdventure · github.com/tabortao/PinyinAdventure<br>
+    alfredang/hanyupinyinapp · github.com/alfredang/hanyupinyinapp
+  </p>
+  <p style="margin-top:12px">本报告基于各项目 README 公开描述与本项目源码核对生成 · 例字数据来源：tools/speak_map.json</p>
+</footer>
+</div>
+</body>
+</html>

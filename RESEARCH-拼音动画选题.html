@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>拼音动画选题调研：还有哪些规则值得做成动画</title>
+<style>
+  :root{
+    --paper:#fff; --canvas:#f1f5f8; --ink:#3c4a55; --heading:#1f2c37;
+    --muted:#6c7a86; --line:#e4ebf1; --accent:#c8562e; --orange:#ff8658;
+    --blue:#23658b; --blue-wash:#edf7ff; --green:#2f8f6b; --green-wash:#eefaf4;
+    --amber:#b9801a; --amber-wash:#fff8e8; --gray-wash:#f6f8fa;
+    --shadow:0 10px 34px rgba(37,56,75,.08);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--canvas);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:16.5px;line-height:1.8;-webkit-font-smoothing:antialiased;
+  }
+  .paper{max-width:900px;margin:26px auto;background:var(--paper);border-radius:10px;
+    padding:46px 44px 34px;box-shadow:var(--shadow);position:relative;overflow-wrap:anywhere}
+  .paper:before{content:"";position:absolute;inset:0 0 auto;height:4px;border-radius:10px 10px 0 0;
+    background:linear-gradient(90deg,#ff9d64,#a9a6ba)}
+
+  h1{margin:0;font-size:31px;line-height:1.4;color:var(--heading);font-weight:800;letter-spacing:.3px}
+  .subtitle{margin:12px 0 0;font-size:19px;line-height:1.6;font-weight:600;color:#4c5965}
+  .lead{margin:18px 0 0;line-height:1.9}
+  .meta{margin:16px 0 0;font-size:12.5px;color:var(--muted)}
+
+  .summary{margin:26px 0 0;padding:20px 24px;background:var(--amber-wash);
+    border-left:4px solid var(--orange);border-radius:6px;line-height:1.85}
+  .summary b{color:var(--heading)}
+
+  section{margin-top:40px}
+  h2{margin:0 0 18px;font-size:22px;font-weight:750;color:var(--heading);
+    padding-bottom:11px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:10px}
+  .num{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;
+    padding:0 6px;border-radius:50%;background:#424e58;color:#fff;font-size:14px;font-weight:650;flex:none}
+  h3{margin:26px 0 10px;font-size:18px;color:var(--heading)}
+  p{margin:0}
+  p+p{margin-top:12px}
+  strong{color:var(--heading);font-weight:650}
+
+  /* 已有覆盖 */
+  .covered{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .tag{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:999px;
+    font-size:13.5px;font-weight:650;background:var(--green-wash);color:var(--green);border:1px solid #cdeee0}
+  .tag.ghost{background:var(--gray-wash);color:var(--muted);border-color:var(--line)}
+
+  /* 候选卡片 */
+  .cards{display:flex;flex-direction:column;gap:16px;margin-top:14px}
+  .card{border:1px solid var(--line);border-radius:12px;padding:20px 22px;background:#fff;
+    position:relative;transition:.2s}
+  .card:hover{box-shadow:0 8px 24px rgba(37,56,75,.09);transform:translateY(-1px)}
+  .card.p0{border-left:5px solid var(--accent)}
+  .card.p1{border-left:5px solid var(--blue)}
+  .card.p2{border-left:5px solid #b9c3cc}
+  .card-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .rank{font-size:12px;font-weight:800;color:#fff;background:var(--accent);padding:3px 9px;border-radius:6px;flex:none;margin-top:3px}
+  .card.p1 .rank{background:var(--blue)}
+  .card.p2 .rank{background:#9aa8b4}
+  .card h3{margin:0;font-size:19px;flex:1 1 14em;min-width:0}
+  .badges{display:flex;gap:6px;flex-wrap:wrap;flex:none}
+  .badge{font-size:11.5px;font-weight:650;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .b-value{background:#fff0e9;color:var(--accent);border:1px solid #ffd3c0}
+  .b-cost{background:#eef2f6;color:#5f6f7c;border:1px solid #dfe7ee}
+  .b-why{background:var(--blue-wash);color:var(--blue);border:1px solid #cfe7f6}
+
+  .verse{margin:12px 0 0;padding:11px 15px;background:#fbfcfe;border:1px dashed #dbe5ee;
+    border-radius:8px;font-size:15px;line-height:1.85;color:#40505c}
+  .verse b{color:var(--accent)}
+
+  .why{margin:12px 0 0;font-size:15px;line-height:1.8}
+  .why .k{color:var(--heading);font-weight:650}
+
+  .shots{margin:14px 0 0;display:flex;gap:10px;align-items:stretch;flex-wrap:wrap}
+  .shot{flex:1 1 150px;min-width:140px;background:var(--gray-wash);border:1px solid var(--line);
+    border-radius:9px;padding:10px 12px;font-size:13px;line-height:1.7;color:#4f5e6a}
+  .shot .n{display:inline-block;font-size:11px;font-weight:800;color:#fff;background:#8fa0ad;
+    border-radius:5px;padding:1px 7px;margin-bottom:5px}
+
+  /* 分镜里的字母演示 */
+  .mini{display:flex;align-items:center;gap:5px;margin:7px 0 2px;font-weight:800;font-size:17px;flex-wrap:wrap}
+  .box{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;
+    padding:0 6px;border-radius:7px;background:#fff;border:1.5px solid #cfdde8;color:var(--heading);font-size:15px}
+  .box.hot{background:#fff2ea;border-color:#ffc4a8;color:var(--accent)}
+  .box.cool{background:var(--blue-wash);border-color:#c2e0f2;color:var(--blue)}
+  .box.gone{opacity:.35;text-decoration:line-through}
+  .arrow{color:#9aa8b4;font-size:13px}
+
+  /* 优先级矩阵 */
+  .matrix{margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .quad{border-radius:10px;padding:14px 16px;font-size:13.5px;line-height:1.75;min-height:118px}
+  .quad h4{margin:0 0 7px;font-size:14px;color:var(--heading)}
+  .q1{background:#fff4ee;border:1px solid #ffd8c6}
+  .q2{background:#eef7fd;border:1px solid #cfe7f6}
+  .q3{background:#f7f9fb;border:1px solid var(--line)}
+  .q4{background:#f7f9fb;border:1px solid var(--line)}
+  .quad ul{margin:0;padding-left:1.2em}
+  .quad li{margin:3px 0}
+
+  /* 推荐 */
+  .plan{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+  .step{display:flex;gap:12px;padding:14px 16px;border-radius:10px;background:#fbfcfe;border:1px solid var(--line)}
+  .step .no{flex:none;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;
+    font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .step .tx{flex:1;font-size:14.5px;line-height:1.75}
+  .step .tx b{color:var(--heading)}
+
+  table{border-collapse:separate;border-spacing:0;width:100%;margin:16px 0 0;font-size:14px;
+    border:1px solid #dce9f1;border-radius:8px;overflow:hidden}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--blue-wash);color:var(--blue);font-weight:650;font-size:13px}
+  tbody tr:last-child td{border-bottom:0}
+  td:first-child{color:var(--heading);font-weight:600}
+
+  .src{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);line-height:1.9}
+  .src a{color:var(--blue);text-decoration:none;border-bottom:1px dashed #a9cde3}
+  footer{margin-top:22px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+  @media (max-width:640px){
+    .paper{padding:26px 20px}
+    .matrix{grid-template-columns:1fr}
+    h1{font-size:25px}
+  }
+</style>
+</head>
+<body>
+<main class="paper">
+
+<header>
+  <h1>拼音还有哪些规则值得做成动画</h1>
+  <p class="subtitle">把已做的五幕排除后，按「画面里有没有位置、顺序、变形」筛一遍</p>
+  <p class="lead">这份调研只回答一个问题：在四声、b d p q 左右手、ü 的两点、介母、ie/ei 与 iu/ui 之后，还有哪些拼音规则和顺口溜适合用动画讲，而不是只能靠背。判断标准放在前面——一条规则如果本身含有<strong>空间位置</strong>（前/后、上/下、左/右）、<strong>先后顺序</strong>或<strong>字形变形</strong>，动画就能替孩子把关系演出来；如果只是并列的记忆清单，做成动画收益很低。</p>
+  <p class="meta">调研时间：2026-11-18 ｜ 参考：教育部拼音教学专题、中国侨网标调说明、武汉教育云拼音儿歌集、同类开源项目 README</p>
+</header>
+
+<div class="summary">
+  <b>一句话结论：</b>最值得补的是<b>标调规则</b>和<b>y / w 整体认读</b>这两条。前者是「一顶帽子在一排韵母里找位置」，后者是「小字母后退、合体、摘帽」，两者都天然带位置与变形，和现有五幕的风格一致。前后鼻音、平翘舌、单韵母口型属于「口腔剖面」类，效果强但需要画图，建议放在第二轮。
+</div>
+
+<section>
+  <h2><span class="num">1</span>已经覆盖的，不重复做</h2>
+  <div class="covered">
+    <span class="tag">四声调型 · 描述曲线</span>
+    <span class="tag">b d p q · 左右手四格</span>
+    <span class="tag">ü 的两点 · 去留对比</span>
+    <span class="tag">介母 · i/u 飞入拼合</span>
+    <span class="tag">ie/ei · iu/ui · 谁在前</span>
+  </div>
+  <p style="margin-top:14px;font-size:14.5px;color:var(--muted)">这几幕已经占掉了「声调形状」「形近字母」「ü 去点」「补介母」「复韵母换位」五个最典型的位置类知识点。下面候选要避开它们，或者做成它们的延伸。</p>
+</section>
+
+<section>
+  <h2><span class="num">2</span>第一优先级：位置和变形都在画面上</h2>
+
+  <div class="cards">
+
+    <article class="card p0">
+      <div class="card-head">
+        <span class="rank">P0</span>
+        <h3>标调规则：声调帽子戴在谁头上</h3>
+        <div class="badges">
+          <span class="badge b-value">价值 高</span>
+          <span class="badge b-cost">成本 低</span>
+          <span class="badge b-why">位置 + 选择</span>
+        </div>
+      </div>
+      <p class="verse">「有 a 不放过，没 a 找 o e；i u 并列标在后，这样标调不会错。」<br>「i 上标调把点去。」<span style="color:#8b99a5">（教育部拼音教学专题／中国侨网）</span></p>
+      <p class="why"><span class="k">为什么适合动画：</span>它本质上是一次<b>寻位</b>——四个单韵母排成一排，声调帽从上面飞过，按「a → o → e → i → u」的顺序找第一个能戴的；遇到 iu、ui 这种并列，帽子专门滑到<b>后面那个</b>；落在 i 上时，i 头上那一点要让位消失。位置、优先级、变形三样都齐了，而且和已做的「四声调型」是同一个视觉语言，可以连成一组。</p>
+      <div class="shots">
+        <div class="shot"><span class="n">分镜 1</span>
+          <div class="mini"><span class="box">a</span><span class="box">o</span><span class="box">e</span><span class="box">i</span><span class="box">u</span></div>
+          一排单韵母就位，帽子在正上方出现。</div>
+        <div class="shot"><span class="n">分镜 2</span>
+          <div class="mini"><span class="box hot">mā</span><span class="arrow">←</span><span class="box">a</span><span class="arrow">有 a 就戴 a</span></div>
+          帽子落到 a 上；没有 a 时，按 o、e 顺序继续找。</div>
+        <div class="shot"><span class="n">分镜 3</span>
+          <div class="mini"><span class="box">i</span><span class="box hot">ū</span><span class="arrow">iu 标在后</span></div>
+          iu／ui 并列时，帽子滑到后面；落在 i 上时点消失。</div>
+      </div>
+    </article>
+
+    <article class="card p0">
+      <div class="card-head">
+        <span class="rank">P0</span>
+        <h3>y / w 整体认读：小 i 见大 y 往后退</h3>
+        <div class="badges">
+          <span class="badge b-value">价值 高</span>
+          <span class="badge b-cost">成本 低</span>
+          <span class="badge b-why">移动 + 合体 + 摘帽</span>
+        </div>
+      </div>
+      <p class="verse">「小 i 见大 y，赶快往后退；小 u 见大 w，边哭边后退。」<br>「小 ü 很骄傲，两眼往上瞧，大 y 帮助它，摘掉骄傲帽。」<span style="color:#8b99a5">（拼音儿歌集，武汉教育云等）</span></p>
+      <p class="why"><span class="k">为什么适合动画：</span>三段都是<b>两个字母的相遇</b>：i 退到 y 后面合成 yi，u 退到 w 后面合成 wu，ü 遇到 y 时两点被摘掉变成 yu。它和已做的「ü 两点」共用同一套动作语汇（后退、合体、摘帽），孩子看第二遍就能预判，学习迁移最强。</p>
+      <div class="shots">
+        <div class="shot"><span class="n">分镜 1</span>
+          <div class="mini"><span class="box cool">y</span><span class="box">i</span><span class="arrow">→</span><span class="box hot">yi</span></div>
+          i 向后滑，贴到 y 后面合成整体认读 yi。</div>
+        <div class="shot"><span class="n">分镜 2</span>
+          <div class="mini"><span class="box cool">w</span><span class="box">u</span><span class="arrow">→</span><span class="box hot">wu</span></div>
+          u 同样后退合体；强调「不能拼，直接读」。</div>
+        <div class="shot"><span class="n">分镜 3</span>
+          <div class="mini"><span class="box cool">y</span><span class="box">ü</span><span class="arrow">→</span><span class="box hot">yu</span></div>
+          ü 的两点被摘下飞走，字形成 yu，读音仍是 ü。</div>
+      </div>
+    </article>
+
+    <article class="card p0">
+      <div class="card-head">
+        <span class="rank">P0</span>
+        <h3>两拼与三拼：前音轻短后音重</h3>
+        <div class="badges">
+          <span class="badge b-value">价值 高</span>
+          <span class="badge b-cost">成本 低</span>
+          <span class="badge b-why">节奏 + 碰撞</span>
+        </div>
+      </div>
+      <p class="verse">「前音轻短后音重，两音相碰猛一碰。」<br>「声轻介快韵母响，三拼连读很顺当。」<span style="color:#8b99a5">（教育部拼音教学专题／拼音儿歌）</span></p>
+      <p class="why"><span class="k">为什么适合动画：</span>这条讲的是<b>时间上的轻重快慢</b>，最适合用「速度对比」演出来：声母块短促地弹一下，韵母块重重落下相碰；三拼时介母像一颗小弹珠快速穿过中间。它可以直接接在现有「介母」那一幕后面，作为那一幕的收尾，而不是新开一幕。</p>
+      <div class="shots">
+        <div class="shot"><span class="n">分镜 1</span>
+          <div class="mini"><span class="box">b</span><span class="arrow">轻短</span><span class="box hot">a</span><span class="arrow">重</span></div>
+          两音相碰，后一块放大落下，合成 ba。</div>
+        <div class="shot"><span class="n">分镜 2</span>
+          <div class="mini"><span class="box">j</span><span class="box">i</span><span class="box">a</span><span class="arrow">轻 · 快 · 响</span></div>
+          三拼时中间介母快速滑过，两头清楚。</div>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">3</span>第二优先级：要画口腔剖面，效果强但工作量大</h2>
+  <p style="font-size:15px;color:#4f5e6a">这一组的知识点本身很值，但画面主体是「嘴和舌头」，需要一套侧面口腔示意图，和现在的字母方块风格不同。建议在第一组做完、视觉资源复用成熟后再启动。</p>
+
+  <div class="cards">
+
+    <article class="card p1">
+      <div class="card-head">
+        <span class="rank">P1</span>
+        <h3>前后鼻音：气往鼻子跑，舌根抬不抬</h3>
+        <div class="badges">
+          <span class="badge b-value">价值 高</span>
+          <span class="badge b-cost">成本 中高</span>
+          <span class="badge b-why">对比 + 方向</span>
+        </div>
+      </div>
+      <p class="verse">「前鼻韵舌前伸，后鼻韵抬舌根；口里的气往鼻子跑。」<br>「树下乘凉 in in in；老鹰飞翔 ing ing ing。」<span style="color:#8b99a5">（拼音口诀大全／武汉教育云）</span></p>
+      <p class="why"><span class="k">为什么适合动画：</span>an/ang、en/eng、in/ing 的差别只有一处——<b>舌头前伸还是舌根抬起</b>，以及气流出口。动画可以用同一个口腔剖面对比两次，差异点用高亮标出；失败的尾巴 -ng 还可以做一个「声音往后拖」的余震效果。</p>
+      <div class="shots">
+        <div class="shot"><span class="n">分镜 1</span>
+          <div class="mini"><span class="box">a</span><span class="box hot">n</span><span class="arrow">舌尖前伸</span></div>
+          前鼻音：舌尖抵住上齿龈，气从前出。</div>
+        <div class="shot"><span class="n">分镜 2</span>
+          <div class="mini"><span class="box">a</span><span class="box hot">ng</span><span class="arrow">舌根抬起</span></div>
+          后鼻音：舌根抬起，气从鼻腔走，尾巴拖长。</div>
+      </div>
+    </article>
+
+    <article class="card p1">
+      <div class="card-head">
+        <span class="rank">P1</span>
+        <h3>平翘舌：舌尖抵齿背，还是翘向硬腭</h3>
+        <div class="badges">
+          <span class="badge b-value">价值 高</span>
+          <span class="badge b-cost">成本 中高</span>
+          <span class="badge b-why">对比 + 部位</span>
+        </div>
+      </div>
+      <p class="verse">「z c s 平舌，舌尖抵住上齿背；zh ch sh r 翘舌，舌尖翘起抵硬腭。」<span style="color:#8b99a5">（项目知识页已有文字版）</span></p>
+      <p class="why"><span class="k">为什么适合动画：</span>这是南方孩子最常混的一组，差别<b>只在舌尖位置</b>。用同一张口腔图，舌尖在「齿背」和「硬腭」两个位置之间移动，配合 zi/zhī 的对比音，一眼看懂。和前后鼻音可以共用同一套口腔素材。</p>
+      <div class="shots">
+        <div class="shot"><span class="n">分镜 1</span>
+          <div class="mini"><span class="box">zi</span><span class="arrow">舌尖 · 齿背</span></div>
+          平舌：舌尖平贴上去，气流从缝里挤。</div>
+        <div class="shot"><span class="n">分镜 2</span>
+          <div class="mini"><span class="box hot">zhī</span><span class="arrow">舌尖 · 翘起</span></div>
+          翘舌：舌尖卷起抵硬腭，位置明显更高。</div>
+      </div>
+    </article>
+
+    <article class="card p1">
+      <div class="card-head">
+        <span class="rank">P1</span>
+        <h3>单韵母口型：张大、圆、扁、齐、突、吐泡</h3>
+        <div class="badges">
+          <span class="badge b-value">价值 中高</span>
+          <span class="badge b-cost">成本 中</span>
+          <span class="badge b-why">渐变 + 对比</span>
+        </div>
+      </div>
+      <p class="verse">「小嘴张大 a a a，嘴巴圆圆 o o o，嘴巴扁扁 e e e，牙齿站齐 i i i，嘴巴突出 u u u，鱼儿吐泡 ü ü ü。」<span style="color:#8b99a5">（拼音儿歌集）</span></p>
+      <p class="why"><span class="k">为什么适合动画：</span>六个单韵母正好是<b>口型连续变化</b>的六个点，可以做成一条「嘴型滑块」：从左到右拖动，嘴形连续变形，字母同步高亮。它还能自然引出复韵母——ai 就是嘴型从 a 滑到 i。</p>
+      <div class="shots">
+        <div class="shot"><span class="n">分镜 1</span>
+          <div class="mini"><span class="box hot">a</span><span class="box">o</span><span class="box">e</span><span class="box">i</span><span class="box">u</span><span class="box">ü</span></div>
+          六个口型排成一条连续的带。</div>
+        <div class="shot"><span class="n">分镜 2</span>
+          <div class="mini"><span class="box">a</span><span class="arrow">→</span><span class="box">i</span><span class="arrow">=</span><span class="box hot">ai</span></div>
+          复韵母就是口型滑动，字母跟着滑。</div>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">4</span>第三优先级：对比与变调，有更好、没有也不缺</h2>
+
+  <div class="cards">
+
+    <article class="card p2">
+      <div class="card-head">
+        <span class="rank">P2</span>
+        <h3>n 与 l、f 与 h：一组组对比着听</h3>
+        <div class="badges">
+          <span class="badge b-value">价值 中</span>
+          <span class="badge b-cost">成本 低</span>
+          <span class="badge b-why">对比</span>
+        </div>
+      </div>
+      <p class="verse">「一门 n，两门 m」「小门小门 n n n，小棍小棍 l l l」<span style="color:#8b99a5">（三字经式口诀／拼音休息操）</span></p>
+      <p class="why"><span class="k">为什么排在后面：</span>n/l、f/h 的差别是<b>发音方法</b>（鼻音／边音、唇齿／喉），不是位置，动画能演的主要是「气从鼻子出还是从两边出」。做得好需要气流示意，和口腔剖面组重叠，可以并进去一起做，不必单开。</p>
+    </article>
+
+    <article class="card p2">
+      <div class="card-head">
+        <span class="rank">P2</span>
+        <h3>「一」和「不」的变调</h3>
+        <div class="badges">
+          <span class="badge b-value">价值 中</span>
+          <span class="badge b-cost">成本 低</span>
+          <span class="badge b-why">条件切换</span>
+        </div>
+      </div>
+      <p class="verse">「一」在四声前读二声（yí），在一、二、三声前读四声（yì）；「不」在四声前读二声（bú）。</p>
+      <p class="why"><span class="k">为什么适合动画：</span>声调符号可以<b>随后面的字自动换</b>：同一个「一」，后面接「天」时帽子是四声，接「个」时帽子变成二声。这个「帽子跟着变」的动效很直观，但属于进阶内容，低龄孩子先学标调更划算。</p>
+    </article>
+
+    <article class="card p2">
+      <div class="card-head">
+        <span class="rank">P2</span>
+        <h3>ian / üan 的变音</h3>
+        <div class="badges">
+          <span class="badge b-value">价值 中</span>
+          <span class="badge b-cost">成本 低</span>
+          <span class="badge b-why">音变</span>
+        </div>
+      </div>
+      <p class="verse">ian 实际读作 ien（tian → tien），üan 实际读作 üen（yuan）。<span style="color:#8b99a5">（同类项目 chen2qu/pinyin 更新日志提到）</span></p>
+      <p class="why"><span class="k">为什么排在后面：</span>这是「写出来和读出来不一样」的规则，动画可以演字母 a 悄悄变成 e 的过程。但它比较冷门，多数一年级教材不单独讲，适合作为高年级或纠音内容。</p>
+    </article>
+
+    <article class="card p2">
+      <div class="card-head">
+        <span class="rank">P2</span>
+        <h3>23 个声母形状顺口溜</h3>
+        <div class="badges">
+          <span class="badge b-value">价值 中</span>
+          <span class="badge b-cost">成本 中</span>
+          <span class="badge b-why">字形描画</span>
+        </div>
+      </div>
+      <p class="verse">「右下半圆 b b b」「9 字加弯 g g g」「一根拐杖 f f f」「两个门洞 m m m」……<span style="color:#8b99a5">（项目 mnemonics.rs 已有 23 条文字版）</span></p>
+      <p class="why"><span class="k">为什么不做成整幕：</span>这些口诀是<b>单字母形状</b>，可以做成「描红式」小动画（笔画按口诀顺序描出），但 23 条各自独立，没有共同结构，做成一幕会很散。建议放进「查表」页，点某个声母时在卡片里播一个 2 秒描形动画，而不是单独一幕。</p>
+    </article>
+
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">5</span>不适合做动画的</h2>
+  <p class="why">整体认读音节 16 个（zhi chi shi ri zi ci si yi wu yu ye yue yuan yin yun ying）本质是一张<b>要背的清单</b>，没有位置或顺序可演。它唯一能动画化的是其中 yi / wu / yu 三个的合成过程——这部分已经归到上面的 y/w 那条，剩下的 13 个做成动画收益很低，保持列表 + 点读即可。</p>
+</section>
+
+<section>
+  <h2><span class="num">6</span>价值 × 成本：先做哪一个</h2>
+  <div class="matrix">
+    <div class="quad q1">
+      <h4>价值高 · 成本低（先做）</h4>
+      <ul>
+        <li>标调规则（帽子找位置）</li>
+        <li>y / w 整体认读（后退 · 合体 · 摘帽）</li>
+        <li>两拼三拼（轻短 · 相碰 · 快速滑过）</li>
+      </ul>
+    </div>
+    <div class="quad q2">
+      <h4>价值高 · 成本高（第二轮）</h4>
+      <ul>
+        <li>前后鼻音（口腔剖面 + 气流）</li>
+        <li>平翘舌（舌尖位置对比）</li>
+        <li>单韵母口型（嘴型连续变形）</li>
+      </ul>
+    </div>
+    <div class="quad q3">
+      <h4>价值中 · 成本低（顺手做）</h4>
+      <ul>
+        <li>n/l、f/h 对比（并入剖面组）</li>
+        <li>「一」「不」变调（帽子跟着换）</li>
+      </ul>
+    </div>
+    <div class="quad q4">
+      <h4>价值中 · 成本中（不急）</h4>
+      <ul>
+        <li>ian / üan 变音</li>
+        <li>23 条声母描形（放进查表页）</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">7</span>建议的下一步</h2>
+  <div class="plan">
+    <div class="step">
+      <span class="no">1</span>
+      <div class="tx"><b>标调规则</b>做成一幕：一排单韵母 + 一顶会飞的声调帽，演示「有 a 戴 a → 没 a 找 o e → iu 并列标在后 → i 上标调去点」。复用现有的字母方块和动画值，几乎不用新素材。</div>
+    </div>
+    <div class="step">
+      <span class="no">2</span>
+      <div class="tx"><b>y / w 整体认读</b>做成一幕：i 后退合体成 yi、u 后退成 wu、ü 被摘帽成 yu。动作和现有「ü 两点」一致，可以把两幕做成前后呼应的姊妹篇。</div>
+    </div>
+    <div class="step">
+      <span class="no">3</span>
+      <div class="tx"><b>两拼三拼</b>并进现有「介母」那一幕的结尾，用速度对比收尾，不新增幕，只加 3 秒。</div>
+    </div>
+    <div class="step">
+      <span class="no">4</span>
+      <div class="tx">第二轮再开<b>口腔剖面</b>系列（前后鼻音 / 平翘舌 / 单韵母口型），先做一张可复用的侧面口腔图，三幕共享。</div>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>候选</th><th>核心口诀</th><th>动画类型</th><th>建议</th></tr></thead>
+    <tbody>
+      <tr><td>标调规则</td><td>有 a 不放过，没 a 找 o e；iu 并列标在后</td><td>寻位 + 落位 + 去点</td><td>第一批</td></tr>
+      <tr><td>y / w 整体认读</td><td>小 i 见大 y 往后退；小 ü 见大 y 摘帽</td><td>后退 + 合体 + 摘帽</td><td>第一批</td></tr>
+      <tr><td>两拼三拼</td><td>前音轻短后音重，两音相碰猛一碰</td><td>速度对比 + 碰撞</td><td>并入介母幕</td></tr>
+      <tr><td>前后鼻音</td><td>前鼻舌前伸，后鼻抬舌根</td><td>口腔剖面 + 气流</td><td>第二批</td></tr>
+      <tr><td>平翘舌</td><td>z c s 抵齿背，zh ch sh r 翘硬腭</td><td>口腔剖面 + 位置对比</td><td>第二批</td></tr>
+      <tr><td>单韵母口型</td><td>张大 a、圆圆 o、扁扁 e、站齐 i、突出 u</td><td>嘴型 morph</td><td>第二批</td></tr>
+      <tr><td>「一」「不」变调</td><td>四声前读二声，其余读四声</td><td>帽子随语境切换</td><td>顺手</td></tr>
+      <tr><td>整体认读 16 个</td><td>zhi chi shi ri zi ci si …</td><td>无（清单）</td><td>不做</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="src">
+  <b>来源</b><br>
+  · 教育部《汉语拼音的教学特色》（标调歌、剪刀尖口诀、前音轻短后音重、jqxy 与 ü 相拼去点）：<a href="https://www.moe.gov.cn/s78/A18/A18_ztzl/jnhypyfa/201805/t20180517_336341.html" target="_blank" rel="noopener">moe.gov.cn</a><br>
+  · 中国侨网《声调符号标在哪儿?》《调号应该标在哪儿?》（有 a 不放过、i u 并列标在后、i 上标调点不搁）：<a href="https://www.chinaqw.com/node2/node116/node514/node538/node546/userobject6ai46641.html" target="_blank" rel="noopener">chinaqw.com</a><br>
+  · 南方+《汉语拼音口诀大全》（鼻韵母、标调歌多版本、拼音休息操）：<a href="https://static.nfapp.southcn.com/content/202012/05/c4394719.html" target="_blank" rel="noopener">nfapp.southcn.com</a><br>
+  · 武汉教育云《拼音儿歌》（整体认读 yi/wu/yu 儿歌、复韵母儿歌、两拼三拼）：<a href="https://dxh.wuhaneduyun.cn/index.php?id=1615701325&r=space/person/blog/view&sid=0e32f1eed52c44a898df696ba40cf369" target="_blank" rel="noopener">wuhaneduyun.cn</a><br>
+  · 同类开源项目 chen2qu/pinyin 的更新日志（ian/uan/üan 变音、整体认读的声韵母说明）：<a href="https://github.com/chen2qu/pinyin" target="_blank" rel="noopener">github.com/chen2qu/pinyin</a><br>
+  · 项目内已有内容：<code>src/data/mnemonics.rs</code>（23 条声母顺口溜 + 6 条规则）
+  <p style="margin-top:10px">说明：口诀文字按上述公开教学资料整理，不同地区版本略有差异（如「谁在后面给谁戴」「谁在后面就标谁」），实现时以项目选用版本为准。动画分镜为本报告提出的设计建议，不代表原视频或教材已有动画。</p>
+</div>
+
+<footer>
+  <span>拼音动画选题调研 · 2026-11-18</span>
+  <span>pinyin-pal</span>
+</footer>
+
+</main>
+</body>
+</html>

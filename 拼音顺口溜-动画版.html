@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>拼音顺口溜 · 动画课堂</title>
+<style>
+  :root{
+    --spd:1;
+    --paper:#ffffff;
+    --canvas:#eef3f7;
+    --ink:#33414d;
+    --heading:#1f2d38;
+    --muted:#71808c;
+    --line:#e4ebf1;
+    --orange:#ff8658;
+    --accent:#e8703f;
+    --blue:#2f7fb5;
+    --blue-wash:#eaf5fc;
+    --green:#2fa37a;
+    --green-wash:#eaf8f1;
+    --amber:#e6a52b;
+    --shadow:0 10px 34px rgba(37,56,75,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--ink);
+    background:radial-gradient(1200px 700px at 12% -10%,#fdf3ea 0%,transparent 55%),
+               radial-gradient(1000px 700px at 100% 0%,#e7f4fb 0%,transparent 55%),
+               linear-gradient(160deg,#f6f9fb,#eaf0f5);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .wrap{max-width:1000px;width:100%;height:100%;margin:0 auto;padding:clamp(12px,2.4vh,26px) clamp(14px,3vw,34px) clamp(10px,2vh,20px);display:flex;flex-direction:column;gap:clamp(10px,1.8vh,18px)}
+
+  /* ---------- header ---------- */
+  header{flex:0 0 auto}
+  .title-row{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  h1{font-size:clamp(22px,3.4vh,32px);line-height:1.25;margin:0;color:var(--heading);font-weight:800;letter-spacing:.5px}
+  .badge{font-size:12px;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--orange),var(--accent));padding:4px 11px;border-radius:999px;box-shadow:0 4px 12px rgba(232,112,63,.28)}
+  .sub{margin:6px 0 0;font-size:clamp(12px,1.7vh,15px);color:var(--muted);line-height:1.6}
+  .src{margin-top:5px;font-size:11.5px;color:#94a1ac}
+  .src a{color:var(--blue);text-decoration:none;border-bottom:1px dashed #9cc7e0}
+
+  /* ---------- stage ---------- */
+  .stage{position:relative;flex:1 1 auto;min-height:0}
+  .scene{
+    position:absolute;inset:0;background:var(--paper);border:1px solid var(--line);
+    border-radius:18px;box-shadow:var(--shadow);
+    padding:clamp(16px,2.6vh,28px) clamp(18px,3vw,36px);
+    display:flex;flex-direction:column;gap:clamp(10px,1.8vh,20px);
+    opacity:0;transform:translateY(10px) scale(.99);pointer-events:none;
+    transition:opacity .45s ease,transform .45s ease;
+  }
+  .scene.active{opacity:1;transform:none;pointer-events:auto}
+  .scene-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .chip{font-size:12px;font-weight:700;color:var(--accent);background:#fff2ea;border:1px solid #ffd9c6;padding:4px 12px;border-radius:999px;white-space:nowrap}
+  .verse{font-size:clamp(15px,2.2vh,20px);font-weight:700;color:var(--heading);line-height:1.5}
+  .body{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}
+
+  /* ---------- scene 1: tones ---------- */
+  .tone-row{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(8px,1.6vw,18px);width:100%;max-width:820px}
+  .tone-card{background:#fbfcfe;border:1px solid var(--line);border-radius:14px;padding:clamp(10px,1.8vh,18px) 8px;text-align:center;
+    opacity:0;transform:translateY(16px)}
+  .scene.play .tone-card{animation:cardIn .5s calc(var(--spd) * var(--d)) cubic-bezier(.2,.9,.3,1.3) forwards}
+  @keyframes cardIn{to{opacity:1;transform:none}}
+  .tone-svg{width:100%;height:auto;display:block}
+  .tone-svg .grid{stroke:#eef2f6;stroke-width:1.4}
+  .tone-svg .grid.mid{stroke-dasharray:4 5}
+  .tone-line{fill:none;stroke-width:6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:100;stroke-dashoffset:100}
+  .scene.play .tone-line{animation:draw 1.05s calc(var(--spd) * (var(--d) + .25s)) ease forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .tone-name{margin-top:6px;font-size:clamp(12px,1.7vh,15px);font-weight:700;color:var(--heading)}
+  .tone-word{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .t1{stroke:#e8703f}.t2{stroke:#e0a12a}.t3{stroke:#2fa37a}.t4{stroke:#2f7fb5}
+  .c1{fill:#e8703f}.c2{fill:#e0a12a}.c3{fill:#2fa37a}.c4{fill:#2f7fb5}
+  .tone-glyph{font-size:clamp(26px,4.6vh,42px);font-weight:800}
+
+  /* ---------- scene 2: b d p q ---------- */
+  .hand-grid{display:grid;grid-template-columns:auto 1fr 1fr;gap:clamp(8px,1.4vw,16px);align-items:stretch;width:100%;max-width:720px}
+  .corner{}
+  .colhead,.rowhead{display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;color:var(--heading);font-size:clamp(13px,1.9vh,17px)}
+  .rowhead{writing-mode:initial;flex-direction:row;white-space:nowrap;padding-right:6px}
+  .cell{position:relative;background:#fff;border:2px solid var(--line);border-radius:16px;min-height:clamp(88px,14vh,132px);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    opacity:0;transform:scale(.82) translateY(10px)}
+  .scene.play .cell{animation:cellIn .5s calc(var(--spd) * var(--d)) cubic-bezier(.2,.9,.3,1.35) forwards}
+  @keyframes cellIn{to{opacity:1;transform:none}}
+  .cell .big{font-size:clamp(34px,6vh,54px);font-weight:800;line-height:1}
+  .cell .hint{font-size:11.5px;color:var(--muted)}
+  .cell.left{border-color:#bcdcf0;background:linear-gradient(180deg,#fff,#f4fafe)}
+  .cell.right{border-color:#bfe8d7;background:linear-gradient(180deg,#fff,#f3fbf7)}
+  .cell.left .big{color:var(--blue)}
+  .cell.right .big{color:var(--green)}
+  .cell.down{border-style:dashed;border-width:2px}
+  .arrow{display:inline-block;font-size:.9em;transition:transform .3s}
+  .dir-tag{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700}
+  .dir-up{background:#fff4e6;color:#b9801a}
+  .dir-down{background:#eef1f4;color:#5d6b76}
+
+  /* ---------- scene 3: umlaut ---------- */
+  .u-stage{position:relative;width:100%;max-width:760px;min-height:clamp(230px,38vh,340px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+  .u-center{position:relative;width:clamp(130px,22vh,190px);height:clamp(112px,19vh,158px);display:flex;align-items:center;justify-content:center}
+  .u-letter{font-size:clamp(96px,20vh,168px);font-weight:800;line-height:1;color:var(--heading);font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+  .u-layer{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  .u-u{opacity:1}
+  .u-umlaut{opacity:0}
+  .dots{position:absolute;top:6%;left:50%;transform:translateX(-50%);display:flex;gap:clamp(16px,3vw,30px)}
+  .dot{width:clamp(11px,1.8vh,16px);height:clamp(11px,1.8vh,16px);border-radius:50%;background:var(--blue);box-shadow:inset -2px -2px 0 rgba(0,0,0,.08)}
+  .scene.play .u-u{animation:uHide calc(var(--spd)*8s) linear forwards}
+  .scene.play .u-umlaut{animation:uShow calc(var(--spd)*8s) linear forwards}
+  .scene.play .dot.l{animation:tearL calc(var(--spd)*8s) linear forwards}
+  .scene.play .dot.r{animation:tearR calc(var(--spd)*8s) linear forwards}
+  @keyframes uHide{0%,29%{opacity:1}35%,58%{opacity:0}64%,100%{opacity:1}}
+  @keyframes uShow{0%,29%{opacity:0}35%,58%{opacity:1}64%,100%{opacity:0}}
+  @keyframes tearL{0%,29%{opacity:1;transform:translate(0,0)}35%,55%{opacity:0;transform:translate(-70px,-70px) rotate(-40deg)}61%,78%{opacity:1;transform:translate(0,0)}80%,84%{transform:translate(-5px,2px)}88%,100%{transform:translate(0,0)}}
+  @keyframes tearR{0%,29%{opacity:1;transform:translate(0,0)}35%,55%{opacity:0;transform:translate(70px,-70px) rotate(40deg)}61%,78%{opacity:1;transform:translate(0,0)}80%,84%{transform:translate(5px,2px)}88%,100%{transform:translate(0,0)}}
+  .letters{display:flex;gap:22px;align-items:center;justify-content:center;min-height:46px}
+  .grp{display:flex;gap:8px;opacity:0}
+  .grp.jqx{color:var(--blue)}
+  .grp.nl{color:var(--green)}
+  .grp span{font-size:clamp(24px,4vh,36px);font-weight:800;display:inline-block}
+  .scene.play .grp.jqx{animation:grpA calc(var(--spd)*8s) linear forwards}
+  .scene.play .grp.nl{animation:grpB calc(var(--spd)*8s) linear forwards}
+  @keyframes grpA{0%,8%{opacity:0;transform:translateX(-40px)}15%,48%{opacity:1;transform:none}56%,100%{opacity:0;transform:translateX(-40px)}}
+  @keyframes grpB{0%,58%{opacity:0;transform:translateX(40px)}66%,100%{opacity:1;transform:none}}
+  .bubble{font-size:clamp(14px,2.2vh,19px);font-weight:700;padding:7px 16px;border-radius:999px;opacity:0;transform:translateY(8px)}
+  .bubble.a{background:#eaf5fc;color:var(--blue);border:1px solid #cbe6f7}
+  .bubble.b{background:#eaf8f1;color:var(--green);border:1px solid #c6ecd9}
+  .scene.play .bubble.a{animation:bubA calc(var(--spd)*8s) linear forwards}
+  .scene.play .bubble.b{animation:bubB calc(var(--spd)*8s) linear forwards}
+  @keyframes bubA{0%,33%{opacity:0;transform:translateY(8px)}40%,53%{opacity:1;transform:none}59%,100%{opacity:0;transform:translateY(8px)}}
+  @keyframes bubB{0%,74%{opacity:0;transform:translateY(8px)}81%,100%{opacity:1;transform:none}}
+
+  /* ---------- scene 4: medial ---------- */
+  .blend{width:100%;max-width:780px;display:flex;flex-direction:column;gap:clamp(14px,2.6vh,26px)}
+  .blend-row{display:flex;align-items:center;justify-content:center;gap:clamp(8px,1.6vw,16px);flex-wrap:wrap}
+  .blk{min-width:clamp(52px,7vw,74px);height:clamp(56px,8.4vh,76px);border-radius:14px;display:flex;align-items:center;justify-content:center;
+    font-size:clamp(26px,4.4vh,40px);font-weight:800;background:#fff;border:2px solid var(--line);color:var(--heading)}
+  .blk.s{color:var(--blue);border-color:#c7e2f3;background:#f5fbff}
+  .blk.f{color:var(--green);border-color:#c4e9d8;background:#f3fbf7}
+  .blk.m{color:var(--accent);border-color:#ffd2bc;background:#fff6f0}
+  .slot{position:relative;border:2px dashed #d8e2ea;border-radius:14px;min-width:clamp(52px,7vw,74px);height:clamp(56px,8.4vh,76px);display:flex;align-items:center;justify-content:center;color:#c2cdd6;font-size:22px;background:#fafcfe}
+  .slot .blk.m{position:absolute;inset:-2px;min-width:0;height:auto;border-radius:14px}
+  .op{color:#9dabb6;font-size:clamp(18px,2.6vh,24px);font-weight:700}
+  .res{min-width:clamp(120px,17vw,180px);height:clamp(56px,8.4vh,76px);border-radius:14px;background:linear-gradient(135deg,#fff4ec,#ffe9db);border:2px solid #ffd0b9;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:.25;transition:.35s}
+  .res .py{font-size:clamp(22px,3.6vh,32px);font-weight:800;color:var(--accent);line-height:1}
+  .res .ex{font-size:11px;color:#a86a4a;margin-top:2px}
+  .blend-row.done .res{opacity:1;transform:scale(1.03)}
+  .row1 .s{animation:slideR .55s calc(var(--spd)*.1s) both}
+  .row1 .f{animation:slideL .55s calc(var(--spd)*.35s) both}
+  .row1 .m{animation:drop calc(var(--spd)*.5s) calc(var(--spd)*.95s) cubic-bezier(.2,.9,.3,1.4) both}
+  .row2 .s{animation:slideR .55s calc(var(--spd)*2.2s) both}
+  .row2 .f{animation:slideL .55s calc(var(--spd)*2.45s) both}
+  .row2 .m{animation:drop calc(var(--spd)*.5s) calc(var(--spd)*3.05s) cubic-bezier(.2,.9,.3,1.4) both}
+  .scene.play .row1 .s,.scene.play .row1 .f,.scene.play .row1 .m,
+  .scene.play .row2 .s,.scene.play .row2 .f,.scene.play .row2 .m{animation-play-state:running}
+  .row1 .s,.row1 .f,.row1 .m,.row2 .s,.row2 .f,.row2 .m{animation-play-state:paused;opacity:0}
+  @keyframes slideR{from{opacity:0;transform:translateX(-46px)}to{opacity:1;transform:none}}
+  @keyframes slideL{from{opacity:0;transform:translateX(46px)}to{opacity:1;transform:none}}
+  @keyframes drop{0%{opacity:0;transform:translateY(-60px) scale(.6)}70%{transform:translateY(4px) scale(1.06)}100%{opacity:1;transform:none}}
+  .res.done{opacity:1;transform:scale(1.03)}
+
+  .point{margin:0;font-size:clamp(12px,1.7vh,15px);color:var(--muted);line-height:1.65;border-top:1px dashed var(--line);padding-top:9px;flex:0 0 auto}
+  .point b{color:var(--accent)}
+
+  /* ---------- caption + controls ---------- */
+  .caption{flex:0 0 auto;text-align:center;font-size:clamp(13px,1.9vh,16px);font-weight:700;color:var(--heading);min-height:1.5em}
+  .caption .em{color:var(--accent)}
+  .controls{flex:0 0 auto;display:flex;align-items:center;gap:clamp(8px,1.4vw,14px);flex-wrap:wrap}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  .btn{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;padding:8px 15px;border-radius:11px;border:1px solid var(--line);background:#fff;color:var(--ink);transition:.18s;white-space:nowrap}
+  .btn:hover{border-color:#c9d7e2;transform:translateY(-1px)}
+  .btn.primary{background:linear-gradient(135deg,var(--orange),var(--accent));color:#fff;border-color:transparent;box-shadow:0 6px 16px rgba(232,112,63,.25)}
+  .btn.small{padding:8px 12px}
+  .pager{display:flex;gap:7px;align-items:center;margin-left:auto}
+  .dotbtn{width:11px;height:11px;border-radius:50%;background:#cbd5dd;padding:0;transition:.2s}
+  .dotbtn.on{background:var(--accent);width:26px;border-radius:999px}
+  .bar{position:relative;flex:1 1 120px;min-width:90px;height:5px;border-radius:99px;background:#e3eaf0;overflow:hidden}
+  .bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--orange),var(--accent));border-radius:99px}
+
+  details{flex:0 0 auto;font-size:11px;color:var(--muted)}
+  summary{cursor:pointer;width:fit-content;color:#8796a2}
+  details p{margin:6px 0 0;line-height:1.7}
+
+  .paused .scene *{animation-play-state:paused !important}
+
+  @media (max-width:600px){
+    .hand-grid{grid-template-columns:auto 1fr 1fr}
+    .tone-row{gap:6px}
+    .controls .btn span.txt{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="title-row">
+      <h1>拼音顺口溜 · 动画课堂</h1>
+      <span class="badge">四组规则</span>
+    </div>
+    <p class="sub">八句口诀分别管四声、b d p q 的左右手对应、ü 的两点，以及拼写时补的介母。</p>
+    <p class="src">来源：哔哩哔哩 · 刘伊一讲语文 ·《拼音儿歌顺口溜》· <a href="https://www.bilibili.com/video/BV1FrzvYgEjj/" target="_blank" rel="noopener">BV1FrzvYgEjj</a></p>
+  </header>
+
+  <div class="stage" id="stage">
+
+    <!-- 场景 1：四声 -->
+    <section class="scene active" data-i="0">
+      <div class="scene-head">
+        <span class="chip">1 · 四声调型</span>
+        <span class="verse">一声 ā，二声 á，三声 ǎ，四声 à；</span>
+      </div>
+      <div class="body">
+        <div class="tone-row">
+          <div class="tone-card" style="--d:0s">
+            <svg class="tone-svg" viewBox="0 0 100 100" aria-label="一声 高平">
+              <line class="grid" x1="6" y1="26" x2="94" y2="26"/>
+              <line class="grid mid" x1="6" y1="50" x2="94" y2="50"/>
+              <line class="grid" x1="6" y1="74" x2="94" y2="74"/>
+              <path class="tone-line t1" pathLength="100" d="M16 34 L84 34"/>
+              <text class="tone-glyph c1" x="50" y="97" text-anchor="middle">ā</text>
+            </svg>
+            <div class="tone-name">一声 ˉ</div><div class="tone-word">高平 · 平</div>
+          </div>
+          <div class="tone-card" style="--d:.7s">
+            <svg class="tone-svg" viewBox="0 0 100 100" aria-label="二声 中升">
+              <line class="grid" x1="6" y1="26" x2="94" y2="26"/>
+              <line class="grid mid" x1="6" y1="50" x2="94" y2="50"/>
+              <line class="grid" x1="6" y1="74" x2="94" y2="74"/>
+              <path class="tone-line t2" pathLength="100" d="M16 74 L84 28"/>
+              <text class="tone-glyph c2" x="50" y="97" text-anchor="middle">á</text>
+            </svg>
+            <div class="tone-name">二声 ˊ</div><div class="tone-word">中升 · 扬</div>
+          </div>
+          <div class="tone-card" style="--d:1.4s">
+            <svg class="tone-svg" viewBox="0 0 100 100" aria-label="三声 降升">
+              <line class="grid" x1="6" y1="26" x2="94" y2="26"/>
+              <line class="grid mid" x1="6" y1="50" x2="94" y2="50"/>
+              <line class="grid" x1="6" y1="74" x2="94" y2="74"/>
+              <path class="tone-line t3" pathLength="100" d="M16 40 L46 82 L48 82 L78 34"/>
+              <text class="tone-glyph c3" x="50" y="97" text-anchor="middle">ǎ</text>
+            </svg>
+            <div class="tone-name">三声 ˇ</div><div class="tone-word">降升 · 拐弯</div>
+          </div>
+          <div class="tone-card" style="--d:2.1s">
+            <svg class="tone-svg" viewBox="0 0 100 100" aria-label="四声 全降">
+              <line class="grid" x1="6" y1="26" x2="94" y2="26"/>
+              <line class="grid mid" x1="6" y1="50" x2="94" y2="50"/>
+              <line class="grid" x1="6" y1="74" x2="94" y2="74"/>
+              <path class="tone-line t4" pathLength="100" d="M16 26 L84 78"/>
+              <text class="tone-glyph c4" x="50" y="97" text-anchor="middle">à</text>
+            </svg>
+            <div class="tone-name">四声 ˋ</div><div class="tone-word">全降 · 降</div>
+          </div>
+        </div>
+      </div>
+      <p class="point">四个符号 <b>ˉ ˊ ˇ ˋ</b> 写在字母头上，一声到四声各用一个。调型依次是：平、升、先降后升、降。</p>
+    </section>
+
+    <!-- 场景 2：b d p q -->
+    <section class="scene" data-i="1">
+      <div class="scene-head">
+        <span class="chip">2 · 左右手</span>
+        <span class="verse">左手 b，右手 d；左手向下 p p p，右手向下 q q q；</span>
+      </div>
+      <div class="body">
+        <div class="hand-grid">
+          <div class="corner"></div>
+          <div class="colhead">左手</div>
+          <div class="colhead">右手</div>
+
+          <div class="rowhead"><span class="dir-tag dir-up">不向下</span></div>
+          <div class="cell left" style="--d:.15s">
+            <div class="big">b</div><div class="hint">左手 · 不向下</div>
+          </div>
+          <div class="cell right" style="--d:.75s">
+            <div class="big">d</div><div class="hint">右手 · 不向下</div>
+          </div>
+
+          <div class="rowhead"><span class="dir-tag dir-down">向下 ↓</span></div>
+          <div class="cell left down" style="--d:1.5s">
+            <div class="big">p</div><div class="hint">左手 · 向下</div>
+          </div>
+          <div class="cell right down" style="--d:2.25s">
+            <div class="big">q</div><div class="hint">右手 · 向下</div>
+          </div>
+        </div>
+      </div>
+      <p class="point">先看落在<b>哪只手</b>，再看手<b>是不是向下</b>，就能唯一定位一个字母。b 与 d、p 与 q 两两互为镜像。</p>
+    </section>
+
+    <!-- 场景 3：ü 两点 -->
+    <section class="scene" data-i="2">
+      <div class="scene-head">
+        <span class="chip">3 · ü 的两点</span>
+        <span class="verse">小 ü 见到 j q x 擦掉眼泪；见到 n 和 l 两点不去。</span>
+      </div>
+      <div class="body">
+        <div class="u-stage">
+          <div class="u-center">
+            <div class="u-layer u-u"><span class="u-letter">u</span></div>
+            <div class="u-layer u-umlaut"><span class="u-letter">ü</span></div>
+            <div class="dots"><i class="dot l"></i><i class="dot r"></i></div>
+          </div>
+          <div class="letters">
+            <div class="grp jqx"><span>j</span><span>q</span><span>x</span></div>
+            <div class="grp nl"><span>n</span><span>l</span></div>
+          </div>
+          <div class="bubble a">擦掉眼泪笑嘻嘻 → 写成 u</div>
+          <div class="bubble b">头上两点不能去 → 仍是 ü</div>
+        </div>
+      </div>
+      <p class="point">两点去还是留，看<b>前面的声母</b>：j q x 去掉两点写成 u；n l 保留两点仍写 ü。其他声母的用法，这支口诀没有交代。</p>
+    </section>
+
+    <!-- 场景 4：介母 -->
+    <section class="scene" data-i="3">
+      <div class="scene-head">
+        <span class="chip">4 · 补介母</span>
+        <span class="verse">j q x 见了 a 加 i；g k h 见了 o 加 u；介母只有 i u ü。</span>
+      </div>
+      <div class="body">
+        <div class="blend">
+          <div class="blend-row row1">
+            <div class="blk s">j</div>
+            <span class="op">＋</span>
+            <div class="slot"><div class="blk m">i</div></div>
+            <span class="op">＋</span>
+            <div class="blk f">a</div>
+            <span class="op">→</span>
+            <div class="res"><span class="py">jia</span><span class="ex">家</span></div>
+          </div>
+          <div class="blend-row row2">
+            <div class="blk s">g</div>
+            <span class="op">＋</span>
+            <div class="slot"><div class="blk m">u</div></div>
+            <span class="op">＋</span>
+            <div class="blk f">o</div>
+            <span class="op">→</span>
+            <div class="res"><span class="py">guo</span><span class="ex">锅</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="point">在声母和韵母之间<b>补一个介母</b>再拼：j q x 遇 a 补 <b>i</b>（jia/qia/xia），g k h 遇 o 补 <b>u</b>（guo/kuo/huo）。</p>
+    </section>
+
+  </div>
+
+  <div class="caption" id="caption"></div>
+
+  <div class="controls">
+    <button class="btn small" id="prev" title="上一幕">◀</button>
+    <button class="btn primary" id="play"><span id="playIcon">⏸</span><span class="txt" id="playTxt">暂停</span></button>
+    <button class="btn small" id="next" title="下一幕">▶</button>
+    <button class="btn small" id="slow" title="慢速演示">🐢 <span class="txt">慢速</span></button>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="pager" id="dots"></div>
+  </div>
+
+  <details>
+    <summary>来源与处理说明</summary>
+    <p>口诀文字按视频画面里的黑板板书逐句核对：板书八句依次为四声、左手 b 右手 d、左手向下 p p p 右手向下 q q q、小 ü 见 j q x、小 ü 见 n l、j q x 见 a、g k h 见 o、介母只有 i u ü。自动识别曾把 ü 记成“Y / 一”、把 a、o 记成“啊 / U”，此处以板书为准。视频结尾的“记住了吗”为课堂提问，未纳入正文。动画中的调型、左右手四格、两点飞走与介母飞入均为帮助理解的演示，不改变口诀含义。</p>
+  </details>
+
+</div>
+
+<script>
+(function(){
+  var scenes = Array.prototype.slice.call(document.querySelectorAll('.scene'));
+  var caps = [
+    '一声 <span class="em">平</span> · 二声 <span class="em">扬</span> · 三声 <span class="em">拐弯</span> · 四声 <span class="em">降</span>',
+    '先看<b>哪只手</b>，再看<b>向下没有</b>：b / d / p / q 各占一格',
+    'j q x 让两点<b>飞走</b>；n l 让两点<b>留下</b>',
+    '中间缺的那个字母，就是<b>介母</b>：补上才拼得成'
+  ];
+  var DUR = 8000;
+  var cur = 0, playing = true, slow = false, elapsed = 0, last = performance.now();
+  var caption = document.getElementById('caption');
+  var barFill = document.getElementById('barFill');
+  var dotsBox = document.getElementById('dots');
+  var playIcon = document.getElementById('playIcon');
+  var playTxt = document.getElementById('playTxt');
+  var stage = document.getElementById('stage');
+
+  scenes.forEach(function(_, i){
+    var b = document.createElement('button');
+    b.className = 'dotbtn' + (i === 0 ? ' on' : '');
+    b.title = '第 ' + (i + 1) + ' 幕';
+    b.addEventListener('click', function(){ goto(i); });
+    dotsBox.appendChild(b);
+  });
+  var dotBtns = Array.prototype.slice.call(dotsBox.children);
+
+  function playScene(i){
+    var el = scenes[i];
+    scenes.forEach(function(s, k){ s.classList.toggle('active', k === i); });
+    el.classList.remove('play');
+    void el.offsetWidth;
+    el.classList.add('play');
+    el.querySelectorAll('.res').forEach(function(r){ r.classList.remove('done'); });
+    if(i === 3){
+      setTimeout(function(){ scenes[3].querySelector('.row1 .res').classList.add('done'); }, 1750*window.__spd());
+      setTimeout(function(){ scenes[3].querySelector('.row2 .res').classList.add('done'); }, 3850*window.__spd());
+    }
+  }
+
+  function goto(i){
+    cur = (i + scenes.length) % scenes.length;
+    elapsed = 0;
+    playScene(cur);
+    caption.innerHTML = caps[cur];
+    dotBtns.forEach(function(b, k){ b.classList.toggle('on', k === cur); });
+  }
+
+  function setPlaying(v){
+    playing = v;
+    stage.classList.toggle('paused', !v);
+    playIcon.textContent = v ? '⏸' : '▶';
+    playTxt.textContent = v ? '暂停' : '播放';
+  }
+
+  window.__spd = function(){ return slow ? 1.7 : 1; };
+
+  document.getElementById('prev').addEventListener('click', function(){ goto(cur - 1); });
+  document.getElementById('next').addEventListener('click', function(){ goto(cur + 1); });
+  document.getElementById('play').addEventListener('click', function(){ setPlaying(!playing); });
+  document.getElementById('slow').addEventListener('click', function(){
+    slow = !slow;
+    document.documentElement.style.setProperty('--spd', slow ? '1.7' : '1');
+    this.style.color = slow ? 'var(--accent)' : '';
+    goto(cur);
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowRight') goto(cur + 1);
+    else if(e.key === 'ArrowLeft') goto(cur - 1);
+    else if(e.key === ' '){ e.preventDefault(); setPlaying(!playing); }
+  });
+
+  goto(0);
+  setPlaying(true);
+
+  function tick(now){
+    var dt = now - last; last = now;
+    if(playing){
+      elapsed += dt;
+      var total = DUR * window.__spd();
+      if(elapsed >= total){ goto(cur + 1); }
+      else { barFill.style.width = (elapsed / total * 100) + '%'; }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

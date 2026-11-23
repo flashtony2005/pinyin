@@ -1,0 +1,18 @@
+# Rust 编译产物
+/target/
+
+# nsh 运行时 / 打包产物（含 50MB APK），由 nsh component / package 重建
+/.nsh/
+
+# 本地工作日志与工具缓存（私有、非源码）
+/.workbuddy/
+/.playwright-cli/
+
+# 音频压缩前的原始备份（13MB，正式素材在 assets/audio/）
+assets/audio.orig-*/
+
+# 备份文件 / 日志 / Python 缓存
+*.bak*
+*.log
+__pycache__/
+*.pyc
