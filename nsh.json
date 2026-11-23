@@ -1,15 +1,17 @@
 {
   "name": "拼音拼读",
   "id": "com.lushaohui.pinyinpal",
-  "version": "0.1.0",
-  "build": 2,
+  "version": "0.2.0",
+  "build": 3,
   "rust": ".",
   "root": "App",
   "icon": "assets/icon.png",
   "appearance": "light",
   "statusBar": { "foreground": "dark", "hidden": false },
   "capabilities": {
-    "audio": true
+    "audio": true,
+    "statusBar": true,
+    "webview": { "hosts": [], "media": ["microphone"] }
   },
   "android": {
     "targetSdk": 35

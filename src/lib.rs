@@ -2,6 +2,8 @@
 
 pub mod audio_tone;
 pub mod data;
+pub mod dtw;
+pub mod mic;
 pub mod pinyin;
 pub mod quiz;
 
@@ -337,6 +339,8 @@ pub fn App() -> impl IntoElement {
     let quiz_score = signal((0u32, 0u32));
     let quiz_wrong: Signal<WrongBook> = signal(load_wrong_book());
     let quiz_review = signal(false);
+    // 跟读评测状态（知识页顶部卡片用）
+    let rec_state: Signal<RecTest> = signal(RecTest::Idle);
 
     view()
         .flex_1()
@@ -411,8 +415,15 @@ pub fn App() -> impl IntoElement {
                                         },
                                     )
                                     .otherwise(move || {
-                                        when(move || mode.get() == 4, knowledge_view)
-                                            .otherwise(animation_view)
+                                        when(
+                                            move || mode.get() == 4,
+                                            move || {
+                                                knowledge_view(
+                                                    initial, medial, final_, tone, rec_state,
+                                                )
+                                            },
+                                        )
+                                        .otherwise(animation_view)
                                     })
                                 })
                         })
@@ -2488,7 +2499,13 @@ fn animation_view() -> impl IntoElement {
 }
 
 /// 拼音知识：规则要点 + 23 个声母顺口溜。
-fn knowledge_view() -> impl IntoElement {
+fn knowledge_view(
+    initial: Signal<&'static str>,
+    medial: Signal<&'static str>,
+    final_: Signal<&'static str>,
+    tone: Signal<u8>,
+    rec_state: Signal<RecTest>,
+) -> impl IntoElement {
     view().flex_1().child(
         scroll()
             .flex_1()
@@ -2499,6 +2516,7 @@ fn knowledge_view() -> impl IntoElement {
                     .text_size(px(18.0))
                     .text_color(rgb(0x2C2C2A)),
             )
+            .child(rec_test_card(initial, medial, final_, tone, rec_state))
             .children(
                 RULES
                     .iter()
@@ -2584,6 +2602,249 @@ fn knowledge_view() -> impl IntoElement {
                     .collect::<Vec<_>>(),
             ),
     )
+}
+
+// ---------------------------------------------------------------- 跟读评测
+//
+// 链路：按一下 → 后台录 2 秒（AAudio）→ UI 定时轮询取 PCM
+//      → audio_tone 纯算法判声调 → 和目标声调比对给出鼓励。
+// 不联网、不认字、不上大模型，全部端侧。
+
+/// 跟读评测的一次性状态。
+#[derive(Clone, PartialEq)]
+enum RecTest {
+    Idle,
+    Recording,
+    Done {
+        heard: &'static str,
+        target: &'static str,
+        ok: bool,
+        confidence: f32,
+        advice: &'static str,
+    },
+    Failed(String),
+}
+
+fn tone_index(t: audio_tone::Tone) -> u8 {
+    match t {
+        audio_tone::Tone::One => 1,
+        audio_tone::Tone::Two => 2,
+        audio_tone::Tone::Three => 3,
+        audio_tone::Tone::Four => 4,
+    }
+}
+
+/// 轮询麦克风结果：约 `tries × 150ms` 内取到 PCM 就做声调分析。
+fn rec_test_poll(state: Signal<RecTest>, target: u8, tries: u32) {
+    if let Some(pcm) = mic::take() {
+        let r = audio_tone::analyze_tone(&pcm, mic::SAMPLE_RATE);
+        if r.confidence <= 0.0 {
+            state.set(RecTest::Failed("没有听到声音，靠近一点再读一次".to_owned()));
+            return;
+        }
+        let heard = tone_index(r.tone);
+        let confident = r.confidence >= 0.35;
+        let ok = confident && target <= 4 && heard == target;
+        let advice = if target > 4 {
+            "轻声没有调型，换一、二、三、四声试试"
+        } else if ok {
+            "读得准！保持这个调子"
+        } else if !confident {
+            "没听清，再大声一点、读长一点"
+        } else {
+            "声调不太对，点「听示范」再听一遍"
+        };
+        state.set(RecTest::Done {
+            heard: TONE_NAMES[(heard - 1) as usize],
+            target: TONE_NAMES[(target.clamp(1, 4) - 1) as usize],
+            ok,
+            confidence: r.confidence,
+            advice,
+        });
+        return;
+    }
+    if let Some(err) = mic::take_error() {
+        state.set(RecTest::Failed(err));
+        return;
+    }
+    if tries == 0 {
+        state.set(RecTest::Failed("录音超时，再试一次".to_owned()));
+        return;
+    }
+    std::mem::forget(set_timeout(
+        std::time::Duration::from_millis(150),
+        move || rec_test_poll(state, target, tries - 1),
+    ));
+}
+
+/// 目标音节文本，如 `jia · 三声`。
+fn rec_target_label(initial: &str, medial: &str, final_: &str, tone: u8) -> String {
+    if initial.is_empty() {
+        return "先在上面选声母".to_owned();
+    }
+    let t = TONE_NAMES[(tone.clamp(1, 5) - 1) as usize];
+    if medial.is_empty() {
+        format!("{initial} + {final_} · {t}")
+    } else {
+        format!("{initial} + {medial} + {final_} · {t}")
+    }
+}
+
+fn rec_test_card(
+    initial: Signal<&'static str>,
+    medial: Signal<&'static str>,
+    final_: Signal<&'static str>,
+    tone: Signal<u8>,
+    state: Signal<RecTest>,
+) -> impl IntoElement {
+    view()
+        .gap(px(8.0))
+        .p(px(12.0))
+        .rounded(px(12.0))
+        .bg(rgb(0xFFFFFF))
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .child(text("跟读评测").text_size(px(15.0)).text_color(rgb(0x6750F5)))
+                .child(
+                    text(move || {
+                        rec_target_label(
+                            initial.get(),
+                            medial.get(),
+                            final_.get(),
+                            tone.get(),
+                        )
+                    })
+                    .text_size(px(12.0))
+                    .text_color(rgb(0x5B47D6)),
+                ),
+        )
+        .child(
+            text("点一下，跟着读一遍，看看声调对不对（只用声调轮廓判断，不识别字）。")
+                .text_size(px(11.0))
+                .text_color(rgb(0x888780)),
+        )
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    view()
+                        .px(px(14.0))
+                        .py(px(9.0))
+                        .rounded(px(10.0))
+                        .bg(move || {
+                            if mic::is_recording() {
+                                rgb(0xD9D5EC)
+                            } else {
+                                rgb(0x6750F5)
+                            }
+                        })
+                        .on_press(move || {
+                            if initial.get().is_empty() {
+                                state.set(RecTest::Failed("先在上面选好声母和韵母".to_owned()));
+                                return;
+                            }
+                            if mic::is_recording() {
+                                return;
+                            }
+                            if mic::start(2000) {
+                                state.set(RecTest::Recording);
+                                rec_test_poll(state, tone.get(), 24);
+                            } else {
+                                state.set(RecTest::Failed("麦克风忙，稍后再试".to_owned()));
+                            }
+                        })
+                        .child(
+                            text(move || {
+                                if mic::is_recording() {
+                                    "录音中…"
+                                } else {
+                                    "录 2 秒"
+                                }
+                            })
+                            .text_size(px(13.0))
+                            .text_color(rgb(0xFFFFFF)),
+                        ),
+                )
+                .child(
+                    view()
+                        .px(px(12.0))
+                        .py(px(9.0))
+                        .rounded(px(10.0))
+                        .bg(rgb(0xF1EFFE))
+                        .on_press(move || {
+                            let i = initial.get();
+                            let m = medial.get();
+                            let f = final_.get();
+                            if !i.is_empty() && !m.is_empty() {
+                                speak_three(i, m, f);
+                            } else if !i.is_empty() {
+                                let s = format!("{i}{f}");
+                                speak(&s, tone.get(), 1.0);
+                            }
+                        })
+                        .child(text("听示范").text_size(px(13.0)).text_color(rgb(0x5B47D6))),
+                ),
+        )
+        .child(rec_test_result(state))
+}
+
+fn rec_test_result(state: Signal<RecTest>) -> impl IntoElement {
+    when(
+        move || !matches!(state.get(), RecTest::Idle),
+        move || {
+            view()
+                .gap(px(3.0))
+                .p(px(10.0))
+                .rounded(px(10.0))
+                .bg(move || match state.get() {
+                    RecTest::Done { ok: true, .. } => rgb(0xE4F6EC),
+                    RecTest::Failed(_) => rgb(0xFDE9EE),
+                    _ => rgb(0xF3F1FB),
+                })
+                .child(
+                    text(move || match state.get() {
+                        RecTest::Idle => String::new(),
+                        RecTest::Recording => "正在听…请把整个音节读完".to_owned(),
+                        RecTest::Failed(e) => e,
+                        RecTest::Done { heard, target, ok, .. } => {
+                            if ok {
+                                format!("通过！听到「{heard}」，和选的「{target}」一致")
+                            } else {
+                                format!("再试试：听到「{heard}」，你选的是「{target}」")
+                            }
+                        }
+                    })
+                    .text_size(px(13.0))
+                    .text_color(move || match state.get() {
+                        RecTest::Done { ok: true, .. } => rgb(0x1E9E63),
+                        RecTest::Failed(_) => rgb(0xD83A5B),
+                        _ => rgb(0x5F5E5A),
+                    }),
+                )
+                .child(
+                    when(
+                        move || matches!(state.get(), RecTest::Done { .. }),
+                        move || {
+                            text(move || match state.get() {
+                                RecTest::Done { advice, confidence, .. } => {
+                                    format!("{advice}（把握 {:.0}%）", confidence * 100.0)
+                                }
+                                _ => String::new(),
+                            })
+                            .text_size(px(11.0))
+                            .text_color(rgb(0x888780))
+                        },
+                    )
+                    .otherwise(view),
+                )
+        },
+    )
+    .otherwise(view)
 }
 
 fn syllable_table_view(tone: Signal<u8>) -> impl IntoElement {
