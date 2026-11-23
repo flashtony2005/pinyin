@@ -1,4 +1,8 @@
 //! 拼音拼读：小朋友用声母 + 韵母拼出音节并听发音。
+//!
+//! 工程约束见 `RUST-CONVENTIONS.md`。下面两条只作用于非测试构建：测试里
+//! 用 `unwrap`/`expect` 表达"夹具必须成立"是合理的。
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod audio_tone;
 pub mod data;
@@ -2664,7 +2668,7 @@ fn rec_test_poll(state: Signal<RecTest>, target: u8, tries: u32) {
         return;
     }
     if let Some(err) = mic::take_error() {
-        state.set(RecTest::Failed(err));
+        state.set(RecTest::Failed(err.message().to_owned()));
         return;
     }
     if tries == 0 {

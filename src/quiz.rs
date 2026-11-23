@@ -425,7 +425,9 @@ fn make_options(
             }
             pick_distractors(&groups, &answer, &finals, seed)
         }
-        QuestionKind::ListenTone => unreachable!(),
+        QuestionKind::ListenTone => {
+            unreachable!("ListenTone 的选项在 match 的独立分支里构造，不会落到通用干扰项选取")
+        }
     };
 
     options.extend(distractors);

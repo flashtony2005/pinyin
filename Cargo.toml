@@ -6,6 +6,10 @@ publish = false
 
 [workspace]
 
+[lints.clippy]
+# unsafe 块必须写明 SAFETY 理由（FFI 是本项目唯一的 unsafe 来源）。
+undocumented_unsafe_blocks = "deny"
+
 [dependencies]
 nsh-core = "0.5.1"
 nsh-base = "0.5.1"
