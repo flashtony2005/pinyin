@@ -2291,6 +2291,7 @@ fn recognition_view() -> impl IntoElement {
         )
         .child(
             view()
+                .w_full()
                 .flex_row()
                 .gap(px(5.0))
                 .children(
@@ -2314,6 +2315,8 @@ fn recognition_view() -> impl IntoElement {
                                 .flex_1()
                                 .py(px(7.0))
                                 .rounded(px(10.0))
+                                .items_center()
+                                .justify_center()
                                 .bg(move || {
                                     if s.get() == gi {
                                         rgb(0x6C4FF5)
