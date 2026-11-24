@@ -9,6 +9,7 @@ use std::path::Path;
 
 fn main() {
     println!("cargo:rerun-if-changed=tools/baidu_audio.json");
+    println!("cargo:rerun-if-changed=tools/baidu_triplet_tones.json");
     println!("cargo:rerun-if-changed=tools/speak_map.json");
     gen_baidu();
     gen_examples();
@@ -66,47 +67,61 @@ fn parse_flat_object(text: &str) -> Vec<(String, String)> {
     out
 }
 
-fn gen_baidu() {
-    let manifest = Path::new("tools/baidu_audio.json");
-    let mut entries: Vec<(String, u8)> = Vec::new();
-    if manifest.exists() {
-        let text = fs::read_to_string(manifest).expect("read baidu_audio.json");
-        // Values are tone arrays like "[1, 2, 3]": scan quoted keys followed by brackets.
-        let bytes = text.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            if bytes[i] == b'"' {
-                let start = i + 1;
-                let mut j = start;
-                while j < bytes.len() && bytes[j] != b'"' {
-                    j += 1;
-                }
-                let key = &text[start..j];
-                let mut k = j + 1;
-                while k < bytes.len() && bytes[k] != b'[' {
-                    k += 1;
-                }
-                if k >= bytes.len() {
-                    break;
-                }
-                let mut e = k + 1;
-                let mut mask = 0u8;
-                while e < bytes.len() && bytes[e] != b']' {
-                    if bytes[e].is_ascii_digit() {
-                        let tone = bytes[e] - b'0';
-                        if (1..=4).contains(&tone) {
-                            mask |= 1 << (tone - 1);
-                        }
-                    }
-                    e += 1;
-                }
-                if !key.is_empty() && mask != 0 {
-                    entries.push((key.to_owned(), mask));
-                }
-                i = e + 1;
-            } else {
-                i += 1;
+/// Parse a {"pinyin": [tone, ...]} manifest into (pinyin, tone bitmask) pairs.
+fn parse_tone_manifest(path: &Path) -> Vec<(String, u8)> {
+    let mut entries = Vec::new();
+    if !path.exists() {
+        return entries;
+    }
+    let text = fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
+    // Values are tone arrays like "[1, 2, 3]": scan quoted keys followed by brackets.
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'"' {
+            let start = i + 1;
+            let mut j = start;
+            while j < bytes.len() && bytes[j] != b'"' {
+                j += 1;
             }
+            let key = &text[start..j];
+            let mut k = j + 1;
+            while k < bytes.len() && bytes[k] != b'[' {
+                k += 1;
+            }
+            if k >= bytes.len() {
+                break;
+            }
+            let mut e = k + 1;
+            let mut mask = 0u8;
+            while e < bytes.len() && bytes[e] != b']' {
+                if bytes[e].is_ascii_digit() {
+                    let tone = bytes[e] - b'0';
+                    if (1..=4).contains(&tone) {
+                        mask |= 1 << (tone - 1);
+                    }
+                }
+                e += 1;
+            }
+            if !key.is_empty() && mask != 0 {
+                entries.push((key.to_owned(), mask));
+            }
+            i = e + 1;
+        } else {
+            i += 1;
+        }
+    }
+    entries
+}
+
+fn gen_baidu() {
+    // 两拼清单 + 三拼整音清单，同名字节合并（声调位掩码取并集）。
+    let mut entries = parse_tone_manifest(Path::new("tools/baidu_audio.json"));
+    for (key, mask) in parse_tone_manifest(Path::new("tools/baidu_triplet_tones.json")) {
+        if let Some((_, existing)) = entries.iter_mut().find(|(k, _)| *k == key) {
+            *existing |= mask;
+        } else {
+            entries.push((key, mask));
         }
     }
     entries.sort_by(|a, b| a.0.cmp(&b.0));

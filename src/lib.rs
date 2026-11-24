@@ -197,7 +197,8 @@ fn speak_three(first: &'static str, medial: &'static str, final_: &'static str) 
     speak_after(final_, 0, 760);
 }
 
-/// 播放当前拼读结果。三拼无整音素材，用分解连读；两拼读整音。
+/// 播放当前拼读结果。三拼优先读整音（百度真人录音），缺该声调时回退分解连读；
+/// 两拼直接读整音。
 fn speak_current(
     initial: &'static str,
     medial: &'static str,
@@ -207,7 +208,13 @@ fn speak_current(
     rate: f32,
 ) {
     if !medial.is_empty() {
-        speak_three(initial, medial, final_);
+        let wanted = if tone == 0 || tone == 5 { 1 } else { tone };
+        let has_whole = baidu::baidu_mask(spoken) & (1 << (wanted - 1)) != 0;
+        if has_whole {
+            speak(spoken, tone, rate);
+        } else {
+            speak_three(initial, medial, final_);
+        }
     } else if !spoken.is_empty() && spoken != "×" {
         speak(spoken, tone, rate);
     }
@@ -2785,7 +2792,14 @@ fn rec_test_card(
                             let m = medial.get();
                             let f = final_.get();
                             if !i.is_empty() && !m.is_empty() {
-                                speak_three(i, m, f);
+                                // 三拼：有整音读整音，否则分解连读。
+                                let whole = format!("{i}{m}{f}");
+                                let wanted = if tone.get() == 0 { 1 } else { tone.get() };
+                                if baidu::baidu_mask(&whole) & (1 << (wanted - 1)) != 0 {
+                                    speak(&whole, tone.get(), 1.0);
+                                } else {
+                                    speak_three(i, m, f);
+                                }
                             } else if !i.is_empty() {
                                 let s = format!("{i}{f}");
                                 speak(&s, tone.get(), 1.0);
