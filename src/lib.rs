@@ -330,7 +330,7 @@ pub fn App() -> impl IntoElement {
     let medial: Signal<&'static str> = signal(""); // 三拼介母 i/u/ü，空=两拼
     let final_: Signal<&'static str> = signal("");
     let spoken: Signal<String> = signal(String::new());
-    // 模式：0=认读 1=拼读 2=音节表 3=练习 4=知识 5=动画（默认进认读，地基优先）
+    // 模式：0=拼读 1=查表 2=练习 3=知识 4=动画（认读已并入动画页子场景）
     let mode: Signal<u8> = signal(0);
     let slow = signal(false);
     let tone: Signal<u8> = signal(1);
@@ -392,66 +392,57 @@ pub fn App() -> impl IntoElement {
                         )
                         .child(mode_switcher(mode)),
                 )
-                .child(
-                    when(move || mode.get() == 0, recognition_view).otherwise(move || {
-                        when(
-                            move || mode.get() == 1,
-                            move || {
-                                view()
-                                    .flex_1()
-                                    .gap(px(10.0))
-                                    .child(practice_view(
-                                        initial, medial, final_, spoken, slow, tone,
-                                    ))
-                                    .child(tone_card_view(initial, medial, final_, spoken, tone))
-                                    .child(result_view(
-                                        initial, medial, final_, spoken, slow, tone,
-                                    ))
-                            },
-                        )
-                        .otherwise(move || {
-                            when(move || mode.get() == 2, move || syllable_table_view(tone))
-                                .otherwise(move || {
-                                    when(
-                                        move || mode.get() == 3,
-                                        move || {
-                                            quiz_view(
-                                                quiz_seed,
-                                                quiz_q,
-                                                quiz_answered,
-                                                quiz_score,
-                                                quiz_wrong,
-                                                quiz_review,
-                                            )
-                                        },
-                                    )
-                                    .otherwise(move || {
-                                        when(
-                                            move || mode.get() == 4,
-                                            move || {
-                                                knowledge_view(
-                                                    initial, medial, final_, tone, rec_state,
-                                                )
-                                            },
-                                        )
-                                        .otherwise(animation_view)
-                                    })
-                                })
-                        })
-                    }),
-                ),
+                .child(when(
+                    move || mode.get() == 0,
+                    move || {
+                        view()
+                            .flex_1()
+                            .gap(px(10.0))
+                            .child(practice_view(
+                                initial, medial, final_, spoken, slow, tone,
+                            ))
+                            .child(tone_card_view(initial, medial, final_, spoken, tone))
+                            .child(result_view(
+                                initial, medial, final_, spoken, slow, tone,
+                            ))
+                    },
+                )
+                .otherwise(move || {
+                    when(move || mode.get() == 1, move || syllable_table_view(tone)).otherwise(
+                        move || {
+                            when(move || mode.get() == 2, move || {
+                                quiz_view(
+                                    quiz_seed,
+                                    quiz_q,
+                                    quiz_answered,
+                                    quiz_score,
+                                    quiz_wrong,
+                                    quiz_review,
+                                )
+                            })
+                            .otherwise(move || {
+                                when(
+                                    move || mode.get() == 3,
+                                    move || {
+                                        knowledge_view(initial, medial, final_, tone, rec_state)
+                                    },
+                                )
+                                .otherwise(animation_view)
+                            })
+                        },
+                    )
+                })),
         )
 }
 
-/// 顶部六态切换按钮（胶囊）：认读 / 拼读 / 查表 / 练习 / 知识 / 动画。
+/// 顶部五态切换按钮（胶囊）：拼读 / 查表 / 练习 / 知识 / 动画（认读在动画页内）。
 fn mode_switcher(mode: Signal<u8>) -> impl IntoElement {
     let items = [
-        ("认读", 0u8),
-        ("拼读", 1),
-        ("查表", 2),
-        ("练习", 3),
-        ("知识", 4),
-        ("动画", 5),
+        ("拼读", 0u8),
+        ("查表", 1),
+        ("练习", 2),
+        ("知识", 3),
+        ("动画", 4),
     ];
     view()
         .flex_row()
@@ -2399,9 +2390,10 @@ fn animation_view() -> impl IntoElement {
         "小 i 见大 y 往后退；小 ü 见大 y 摘掉帽",
         "前音轻短后音重；声轻介快韵母响",
         "n 气走鼻子捏住闷；l 走舌头两边照样响",
+        "认一认 · 分得清，听音辨字记得牢",
     ];
     let tabs = [
-        "四声", "左右手", "ü 点", "介母", "复韵母", "标调", "y w", "拼读", "n / l",
+        "四声", "左右手", "ü 点", "介母", "复韵母", "标调", "y w", "拼读", "n / l", "认读",
     ];
     let tab = move |i: usize| {
         let s = scene;
@@ -2454,59 +2446,70 @@ fn animation_view() -> impl IntoElement {
                         .child(tab(5))
                         .child(tab(6))
                         .child(tab(7))
-                        .child(tab(8)),
+                        .child(tab(8))
+                        .child(tab(9)),
                 ),
         )
-        .child(
+        // 第 10 幕「认读」用独立整页布局（自带卡片），不套白色动画容器。
+        .child(when(move || scene.get() == 9, recognition_view).otherwise(move || {
             view()
                 .flex_1()
-                .p(px(14.0))
-                .rounded(px(18.0))
-                .bg(rgb(0xFFFFFF))
-                .shadow_sm()
-                .justify_center()
+                .gap(px(10.0))
                 .child(
-                    when(move || scene.get() == 0, move || anim_scene_tones())
-                        .otherwise(move || {
-                            when(move || scene.get() == 1, move || anim_scene_hands()).otherwise(
-                                move || {
-                                    when(move || scene.get() == 2, move || anim_scene_umlaut())
+                    view()
+                        .flex_1()
+                        .p(px(14.0))
+                        .rounded(px(18.0))
+                        .bg(rgb(0xFFFFFF))
+                        .shadow_sm()
+                        .justify_center()
+                        .child(
+                            when(move || scene.get() == 0, move || anim_scene_tones())
+                                .otherwise(move || {
+                                    when(move || scene.get() == 1, move || anim_scene_hands())
                                         .otherwise(move || {
-                                            when(move || scene.get() == 3, move || {
-                                                anim_scene_medial()
+                                            when(move || scene.get() == 2, move || {
+                                                anim_scene_umlaut()
                                             })
                                             .otherwise(move || {
-                                                when(move || scene.get() == 4, move || {
-                                                    anim_scene_pairs()
+                                                when(move || scene.get() == 3, move || {
+                                                    anim_scene_medial()
                                                 })
                                                 .otherwise(move || {
-                                                    when(move || scene.get() == 5, move || {
-                                                        anim_scene_tone_rule()
+                                                    when(move || scene.get() == 4, move || {
+                                                        anim_scene_pairs()
                                                     })
                                                     .otherwise(move || {
-                                                        when(move || scene.get() == 6, move || {
-                                                            anim_scene_yw()
+                                                        when(move || scene.get() == 5, move || {
+                                                            anim_scene_tone_rule()
                                                         })
                                                         .otherwise(move || {
-                                                            when(move || scene.get() == 7, move || {
-                                                                anim_scene_blend()
+                                                            when(move || scene.get() == 6, move || {
+                                                                anim_scene_yw()
                                                             })
-                                                            .otherwise(move || anim_scene_nasal())
+                                                            .otherwise(move || {
+                                                                when(
+                                                                    move || scene.get() == 7,
+                                                                    move || anim_scene_blend(),
+                                                                )
+                                                                .otherwise(move || {
+                                                                    anim_scene_nasal()
+                                                                })
+                                                            })
                                                         })
                                                     })
                                                 })
                                             })
                                         })
-                                },
-                            )
-                        }),
-                ),
-        )
-        .child(
-            text(move || verse[scene.get() as usize])
-                .text_size(px(12.0))
-                .text_color(rgb(0x6750F5)),
-        )
+                                }),
+                        ),
+                )
+                .child(
+                    text(move || verse[scene.get() as usize])
+                        .text_size(px(12.0))
+                        .text_color(rgb(0x6750F5)),
+                )
+        }))
 }
 
 /// 拼音知识：规则要点 + 23 个声母顺口溜。
