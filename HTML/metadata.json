@@ -1,0 +1,6 @@
+{
+  "name": "魔法拼音温室 · Pinyin Greenhouse",
+  "description": "结合《Magical Greenhouse》炼金模拟经营循环与开源拼音资源库（声韵组合矩阵、顺口溜与真人声调音频）的儿童拼音学习经营小游戏。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
