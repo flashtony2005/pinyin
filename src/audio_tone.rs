@@ -48,8 +48,9 @@ const MIN_HZ: f32 = 70.0; // 覆盖儿童低音
 const MAX_HZ: f32 = 450.0; // 覆盖儿童高音
 const RMS_GATE: f32 = 0.012; // 低于此能量的帧视为静音
 
-/// 分析一段 16 kHz f32 PCM 的声调。
-pub fn analyze_tone(pcm: &[f32], sample_rate: u32) -> ToneAnalysis {
+/// 提取基频轨迹与相对音分（供声调判定与轮廓比对共用）。
+/// 返回 `(f0_hz, cents)`：无声帧 cents 为 NaN。
+fn pitch_and_cents(pcm: &[f32], sample_rate: u32) -> (Vec<f32>, Vec<f32>) {
     let sr = sample_rate.max(1);
     let frame = (FRAME_SIZE as f32 * sr as f32 / 16_000.0).round() as usize;
     let hop = (HOP as f32 * sr as f32 / 16_000.0).round() as usize;
@@ -68,22 +69,50 @@ pub fn analyze_tone(pcm: &[f32], sample_rate: u32) -> ToneAnalysis {
 
     // 中值滤波去孤立野点（自相关偶尔跳八度）。
     let f0 = median_filter(&f0, 3);
-    // 取有声帧的中位基频作为参考，转成相对音分。
     let voiced: Vec<f32> = f0.iter().copied().filter(|&v| v > 0.0).collect();
     if voiced.is_empty() {
-        return ToneAnalysis { tone: Tone::One, confidence: 0.0, f0_hz: f0, contour: [0.0; 3] };
+        let n = f0.len();
+        return (f0, vec![f32::NAN; n]);
     }
     let mut sorted = voiced.clone();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let base = sorted[sorted.len() / 2];
-
     let cents: Vec<f32> = f0
         .iter()
         .map(|&v| if v > 0.0 { 1200.0 * (v / base).log2() } else { f32::NAN })
         .collect();
+    (f0, cents)
+}
+
+/// 分析一段 16 kHz f32 PCM 的声调。
+pub fn analyze_tone(pcm: &[f32], sample_rate: u32) -> ToneAnalysis {
+    let (f0, cents) = pitch_and_cents(pcm, sample_rate);
     let contour = three_point_contour(&cents);
+    if contour == [0.0; 3] {
+        return ToneAnalysis { tone: Tone::One, confidence: 0.0, f0_hz: f0, contour };
+    }
     let (tone, confidence) = judge(&contour);
     ToneAnalysis { tone, confidence, f0_hz: f0, contour }
+}
+
+/// 20 点相对音分轮廓，供跟读声调相似度比对。
+/// 与 `tools/build_letter_templates.py::f0_contour` 同参（512/160/70-450、
+/// 相对本句中位基频、线性重采样 20 点），因此可与 `LETTER_F0` 模板直接比。
+pub const CONTOUR_POINTS: usize = 20;
+
+pub fn contour_20(pcm: &[f32], sample_rate: u32) -> [f32; CONTOUR_POINTS] {
+    let (_f0, cents) = pitch_and_cents(pcm, sample_rate);
+    let valid: Vec<f32> = cents.into_iter().filter(|v| v.is_finite()).collect();
+    let mut out = [0.0f32; CONTOUR_POINTS];
+    if valid.is_empty() {
+        return out;
+    }
+    // Python: np.linspace(0, len(valid)-1, 20).astype(int) —— floor 取整。
+    for i in 0..CONTOUR_POINTS {
+        let idx = i * (valid.len() - 1) / (CONTOUR_POINTS - 1);
+        out[i] = valid[idx.min(valid.len() - 1)];
+    }
+    out
 }
 
 /// 单帧基频：去直流 + 汉明窗 + NSDF 自相关 + 抛物线插值。

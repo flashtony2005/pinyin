@@ -11,6 +11,7 @@
   "capabilities": {
     "audio": true,
     "statusBar": true,
+    "fs": { "read": ["${dataDir}"], "write": ["${dataDir}"] },
     "webview": { "hosts": [], "media": ["microphone"] }
   },
   "android": {

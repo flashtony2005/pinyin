@@ -8,8 +8,13 @@
 //! 儿童音高与共振峰差异会让距离整体偏大；正确做法是用同龄儿童录音
 //! 重建模板（见 `tools/` 的采集脚本），再把阈值按批次标定。
 //!
+//! 两条特征链路：
+//! - `mfcc` —— 13 维含 c0、仅 CMN，供历史单测与 FFT 验证。
+//! - `enhanced` —— 24 维（c1..c12 + 一阶差分）、逐句 CMN + 全局方差白化，
+//!   供跟读判定。参数与 `tools/build_letter_templates.py` 严格镜像。
+//!
 //! 流水线：PCM → 预加重 → 分帧 + 汉明窗 → 512 点 FFT → 梅尔滤波器组
-//!        → 取对数 → DCT-II → 13 维 MFCC（含 c0）→ 倒谱均值归一化。
+//!        → 取对数 → DCT-II → 13 维 MFCC → 去 c0 + delta + CMN + 白化。
 
 /// MFCC 参数。默认值对应 16 kHz、25 ms 帧长、10 ms 帧移。
 #[derive(Debug, Clone, Copy)]
@@ -33,9 +38,18 @@ impl Default for MfccConfig {
 
 const PRE_EMPHASIS: f32 = 0.97;
 const FFT_SIZE: usize = 512;
+/// 增强特征维度：MFCC c1..c12（12）+ 其一阶差分（12）= 24。
+pub const ENHANCED_DIM: usize = 24;
 
-/// 提取 MFCC：`frames × n_ceps`。末尾不足一帧的部分丢弃。
+/// 13 维 MFCC（含 c0）+ 逐句 CMN。保留给历史单测与 FFT 验证。
 pub fn mfcc(pcm: &[f32], cfg: &MfccConfig) -> Vec<Vec<f32>> {
+    let mut out = raw_ceps(pcm, cfg);
+    cepstral_mean_normalize(&mut out);
+    out
+}
+
+/// 不加 CMN 的 13 维 MFCC（含 c0），增强特征的中间产物。
+fn raw_ceps(pcm: &[f32], cfg: &MfccConfig) -> Vec<Vec<f32>> {
     if pcm.len() < cfg.frame || cfg.frame > FFT_SIZE {
         return Vec::new();
     }
@@ -71,9 +85,9 @@ pub fn mfcc(pcm: &[f32], cfg: &MfccConfig) -> Vec<Vec<f32>> {
         let mut log_mel = vec![0f32; cfg.n_mels];
         for (m, band) in filters.iter().enumerate() {
             let mut sum = 0f32;
-        for &(k, w) in band {
-            sum += power[k] * w;
-        }
+            for &(k, w) in band {
+                sum += power[k] * w;
+            }
             log_mel[m] = (sum.max(1e-10)).ln();
         }
 
@@ -89,9 +103,117 @@ pub fn mfcc(pcm: &[f32], cfg: &MfccConfig) -> Vec<Vec<f32>> {
         out.push(ceps);
         start += cfg.hop;
     }
-
-    cepstral_mean_normalize(&mut out);
     out
+}
+
+/// 一阶差分：中心差分，端点用单侧差分。与 Python `delta()` 镜像。
+fn delta(frames: &[Vec<f32>]) -> Vec<Vec<f32>> {
+    if frames.is_empty() {
+        return Vec::new();
+    }
+    let dim = frames[0].len();
+    let mut out = Vec::with_capacity(frames.len());
+    for i in 0..frames.len() {
+        let mut d = vec![0f32; dim];
+        if frames.len() >= 2 {
+            let (a, b) = match i {
+                0 => (&frames[0], &frames[1]),
+                n if n + 1 == frames.len() => (&frames[n - 1], &frames[n]),
+                n => (&frames[n - 1], &frames[n + 1]),
+            };
+            let scale = if i == 0 || i + 1 == frames.len() { 1.0 } else { 0.5 };
+            for j in 0..dim {
+                d[j] = (b[j] - a[j]) * scale;
+            }
+        }
+        out.push(d);
+    }
+    out
+}
+
+/// 增强特征：c1..c12 + delta(c1..c12)，逐句 CMN，再按 `std` 全局白化。
+/// `std` 长度必须是 24；与生成模板的 `MFCC_STD` 一致。
+pub fn enhanced(pcm: &[f32], cfg: &MfccConfig, std: &[f32; ENHANCED_DIM]) -> Vec<Vec<f32>> {
+    let ceps = raw_ceps(pcm, cfg);
+    if ceps.is_empty() {
+        return Vec::new();
+    }
+    // 去 c0：保留 1..n_ceps（共 12 维）
+    let base: Vec<Vec<f32>> = ceps.iter().map(|f| f[1..].to_vec()).collect();
+    let d = delta(&base);
+    let mut out: Vec<Vec<f32>> = base
+        .iter()
+        .zip(d.iter())
+        .map(|(s, dd)| {
+            let mut row = Vec::with_capacity(ENHANCED_DIM);
+            row.extend_from_slice(s);
+            row.extend_from_slice(dd);
+            row
+        })
+        .collect();
+    // 逐句 CMN（减每维均值）
+    let mut mean = [0f32; ENHANCED_DIM];
+    for row in &out {
+        for (i, &v) in row.iter().enumerate() {
+            mean[i] += v;
+        }
+    }
+    let inv = 1.0 / out.len() as f32;
+    for m in mean.iter_mut() {
+        *m *= inv;
+    }
+    // 白化（分母来自 Python 全局 std，非逐句）
+    for row in &mut out {
+        for (i, v) in row.iter_mut().enumerate() {
+            *v = (*v - mean[i]) / std[i].max(1e-3);
+        }
+    }
+    out
+}
+
+/// 谱平坦度（spectral flatness）：幅度谱的几何均值 / 算术均值。
+///
+/// 纯音（哼声、哨声、正弦）频谱只有一根尖峰 → 接近 0；真实语音有丰富谐波
+/// → 0.15~0.5。这是挡"随便发个音"的关键：MFCC 距离分不开哼声和语音
+/// （实测乱哼 d=1.5 比读对 d=1.9 还近），但谱平坦度差 4 个数量级。
+///
+/// 分帧后取各帧平坦度的中位数，避免单帧静音/爆破瞬时拉偏。
+pub fn spectral_flatness(pcm: &[f32]) -> f32 {
+    const N: usize = 512;
+    const HOP: usize = 160;
+    if pcm.len() < N {
+        return 0.0;
+    }
+    let win = hamming(N);
+    let mut vals = Vec::new();
+    let mut start = 0;
+    while start + N <= pcm.len() {
+        let mut re = vec![0f32; N];
+        let mut im = vec![0f32; N];
+        for i in 0..N {
+            re[i] = pcm[start + i] * win[i];
+        }
+        fft(&mut re, &mut im);
+        // |X[k]|（幅度谱），跳过 DC。与 Python 诊断脚本口径一致。
+        let mut sum_log = 0f32;
+        let mut sum = 0f32;
+        let mut count = 0usize;
+        for k in 1..N / 2 {
+            let mag = (re[k] * re[k] + im[k] * im[k]).sqrt() + 1e-9;
+            sum_log += mag.ln();
+            sum += mag;
+            count += 1;
+        }
+        if count > 0 && sum > 1e-9 {
+            vals.push((sum_log / count as f32).exp() / (sum / count as f32));
+        }
+        start += HOP;
+    }
+    if vals.is_empty() {
+        return 0.0;
+    }
+    vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    vals[vals.len() / 2]
 }
 
 /// 倒谱均值归一化（CMN）：减掉每条轨道的均值，抵消信道/麦克风差异。
@@ -221,7 +343,10 @@ fn fft(re: &mut [f32], im: &mut [f32]) {
 }
 
 /// 两段 MFCC 的 DTW 距离（欧氏局部代价，返回按路径长度归一化的平均代价）。
-pub fn dtw_distance(a: &[Vec<f32>], b: &[Vec<f32>]) -> f32 {
+///
+/// 泛型到 `AsRef<[f32]>`：既接受运行时的 `&[Vec<f32>]`，也接受编译期静态
+/// 模板 `&[&[f32]]`（见 letter_templates），避免每次识别都拷贝模板。
+pub fn dtw_distance<A: AsRef<[f32]>, B: AsRef<[f32]>>(a: &[A], b: &[B]) -> f32 {
     if a.is_empty() || b.is_empty() {
         return f32::INFINITY;
     }
@@ -232,7 +357,7 @@ pub fn dtw_distance(a: &[Vec<f32>], b: &[Vec<f32>]) -> f32 {
     for i in 1..=n {
         cur[0] = f32::INFINITY;
         for j in 1..=m {
-            let cost = euclidean(&a[i - 1], &b[j - 1]);
+            let cost = euclidean(a[i - 1].as_ref(), b[j - 1].as_ref());
             let best = prev[j].min(cur[j - 1]).min(prev[j - 1]);
             cur[j] = cost + if best.is_finite() { best } else { 0.0 };
         }
@@ -253,7 +378,7 @@ fn euclidean(a: &[f32], b: &[f32]) -> f32 {
 
 /// 把 DTW 距离折成 0..1 的相似度。`scale` 是"多远算完全不同"，按模板
 /// 批次标定（先用 40，实测再调）。
-pub fn similarity(a: &[Vec<f32>], b: &[Vec<f32>], scale: f32) -> f32 {
+pub fn similarity<A: AsRef<[f32]>, B: AsRef<[f32]>>(a: &[A], b: &[B], scale: f32) -> f32 {
     let d = dtw_distance(a, b);
     if !d.is_finite() {
         return 0.0;
@@ -320,7 +445,8 @@ mod tests {
     fn empty_input_is_safe() {
         let cfg = MfccConfig::default();
         assert!(mfcc(&[], &cfg).is_empty());
-        assert_eq!(dtw_distance(&[], &[]), f32::INFINITY);
-        assert_eq!(similarity(&[], &[], 40.0), 0.0);
+        let empty: &[Vec<f32>] = &[];
+        assert_eq!(dtw_distance(empty, empty), f32::INFINITY);
+        assert_eq!(similarity(empty, empty, 40.0), 0.0);
     }
 }

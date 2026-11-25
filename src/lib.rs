@@ -5,11 +5,20 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod audio_tone;
+pub mod ctc_feat;
 pub mod data;
 pub mod dtw;
+pub mod letter_match;
 pub mod mic;
 pub mod pinyin;
 pub mod quiz;
+pub mod rec_dump;
+pub mod spell_challenge;
+pub mod spell_net;
+#[cfg(test)]
+mod match_integration;
+#[cfg(test)]
+mod rec_compare;
 
 use std::rc::Rc;
 
@@ -155,7 +164,39 @@ fn tone_colors(t: u8) -> (u32, u32) {
     }
 }
 
+/// 单个声母 → 真人音频相对路径（`assets/` 下）。
+///
+/// 三套音源探测结论：
+/// - 百度 CDN **没有**单字母声母真人音（`b1..w1` 共 92 个 URL 只有 m2/n2，
+///   且内容是「补M2」这类坏数据）；
+/// - 新东方（xdf）有完整单字母声母示范音，音质最好，21/23 读音标准；
+/// - 百度呼读音 mp3 音质一般，但 d/t/r 更标准（de2「得」、te4「特」、ri4「日」），
+///   而 xdf 的 d 读「都」、t 读「托」，元音偏移。
+///
+/// 所以：默认用 xdf 单字母音，d/t/r 用百度呼读音兜底。
+/// 必须与 `tools/build_letter_templates.py` 的 `INITIAL_AUDIO` 保持一致，
+/// 否则播放与识别模板会错位。
+fn initial_audio(letter: &str) -> Option<String> {
+    match letter {
+        // xdf 示范音元音偏移，用百度呼读音（声母不带调，不影响认读）。
+        "d" => Some("audio/bd/de2.mp3".to_owned()), // 「得」
+        "t" => Some("audio/bd/te4.mp3".to_owned()), // 「特」
+        "r" => Some("audio/bd/ri4.mp3".to_owned()), // 「日」
+        // 其余声母用新东方单字母真人示范音。
+        "b" | "p" | "m" | "f" | "n" | "l" | "g" | "k" | "h" | "j" | "q" | "x" | "zh"
+        | "ch" | "sh" | "z" | "c" | "s" | "y" | "w" => {
+            Some(format!("audio/xdf/shengmu/{letter}.mp3"))
+        }
+        _ => None,
+    }
+}
+
 fn speak(name: &str, tone: u8, rate: f32) {
+    // 单字母声母走真人音；其它（韵母/整音节）保持原有的百度真人 → TTS 回退。
+    if let Some(path) = initial_audio(name) {
+        play_uri(&format!("asset:/@{PACKAGE}/{path}"), rate);
+        return;
+    }
     let mask = baidu::baidu_mask(name);
     // 轻声(5) 没有专门音频，回退到第一声；tone=0 同样回退。
     let wanted = if tone == 0 || tone == 5 { 1 } else { tone };
@@ -164,7 +205,12 @@ fn speak(name: &str, tone: u8, rate: f32) {
     } else {
         format!("asset:/@{PACKAGE}/audio/{name}.m4a")
     };
-    let mut player = audio_player(&uri, PlayerSettings::default());
+    play_uri(&uri, rate);
+}
+
+/// 播放一个 asset URI，`rate` 控制语速；player 存活到播放结束（drop 即停止）。
+fn play_uri(uri: &str, rate: f32) {
+    let mut player = audio_player(uri, PlayerSettings::default());
     let mut settings = PlayerSettings::default();
     settings.rate = rate;
     player.set_settings(settings);
@@ -2237,7 +2283,543 @@ fn confusable_card(
 
 /// 认读页：6 组易混对并排认 + 听音辨字小测 + 掌握度持久化。
 /// 顶部组切换胶囊；点卡片发音；「听一听」随机读一个，点对的卡即得分。
+/// 跟读闯关状态：目标字母索引 + 录音/判定阶段 + 分数。
+#[derive(Clone, Copy, PartialEq)]
+enum ChallengePhase {
+    Ready,      // 显示字母，等孩子点录音
+    Recording,  // 正在录 / 分析中
+    Passed,     // 读对了，打勾动画中
+    Failed,     // 没读准，可重来
+}
+
+/// 一次跟读作答的结果：模型判定 + 落盘路径 + 展示用的数字。
+///
+/// 面板（听到/分数/回放/人工判定）都读它；`Default` 表示"这次还没有录音"。
+#[derive(Clone, PartialEq, Default)]
+struct Attempt {
+    /// 录音 WAV 的落盘路径（空 = 没存下来，不能回放）。
+    wav: String,
+    /// 模型听到的音节。
+    heard: &'static str,
+    /// 展示分（0..=100）。
+    percent: u32,
+    /// 目标音节 − 其它音节的余弦间隔。
+    margin: f32,
+    /// 机器判定是否通过。
+    machine_pass: bool,
+    /// 用的哪个判定器：`net`（新模型）/ `dtw`（旧模板）/ `quiet`（太安静）。
+    engine: &'static str,
+}
+
+/// 跟读闯关轮询：录音线程取 PCM → 判定 → 落盘 → 更新面板。
+///
+/// 判定优先级：① 新模型 `spell_net`（音节级、不看声调）；② 词表没覆盖的音节
+/// （ü）退回旧的模板比对 `letter_match`。
+fn challenge_poll<F>(idx: usize, phase: Signal<ChallengePhase>, att: Signal<Attempt>, tries: u32, on_pass: F)
+where
+    F: Fn() + Copy + 'static,
+{
+    if let Some(pcm) = mic::take() {
+        // 太安静：不送模型，直接让孩子重读（避免模型对着噪声瞎猜）。
+        let rms = (pcm.iter().map(|v| v * v).sum::<f32>() / pcm.len().max(1) as f32).sqrt();
+        if rms < 0.004 {
+            att.set(Attempt { engine: "quiet", ..Default::default() });
+            phase.set(ChallengePhase::Failed);
+            return;
+        }
+
+        let key = crate::data::letter_spell_keys::LETTER_SPELL_KEYS
+            .get(idx)
+            .copied()
+            .unwrap_or("");
+        let t0 = std::time::Instant::now();
+        if let Some(v) = spell_net::assess_syllable(&pcm, key) {
+            let ms = t0.elapsed().as_millis();
+            let secs = pcm.len() as f32 / mic::SAMPLE_RATE as f32;
+            eprintln!(
+                "[kari] net 目标={} 听到={}({:.2}) 目标分={:.3} 间隔={:.3} 通过={} {:.0}ms {:.2}s",
+                key, v.top1_syl, v.top1_cos, v.target_cos, v.margin, v.pass, ms, secs
+            );
+            let note = format!(
+                "net heard={} cos={:.2} target={:.3} margin={:.3} pass={}",
+                v.top1_syl, v.top1_cos, v.target_cos, v.margin, v.pass
+            );
+            let wav = rec_dump::dump(&pcm, key, &note)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+            att.set(Attempt {
+                wav,
+                heard: v.top1_syl,
+                percent: spell_net::percent_syl(&v),
+                margin: v.margin,
+                machine_pass: v.pass,
+                engine: "net",
+            });
+            if v.pass {
+                phase.set(ChallengePhase::Passed);
+                on_pass();
+            } else {
+                phase.set(ChallengePhase::Failed);
+            }
+            return;
+        }
+
+        let assessment = letter_match::assess(&pcm, mic::SAMPLE_RATE, idx);
+        let pass = matches!(assessment.verdict, letter_match::Verdict::Pass { .. });
+        eprintln!(
+            "[kari] dtw 目标={} 分数={:.3} 判定={:?}",
+            key, assessment.overall, assessment.verdict
+        );
+        let wav = rec_dump::dump(&pcm, key, &format!("dtw score={:.3} pass={pass}", assessment.overall))
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        att.set(Attempt {
+            wav,
+            heard: "",
+            percent: (assessment.overall * 100.0).round() as u32,
+            margin: 0.0,
+            machine_pass: pass,
+            engine: "dtw",
+        });
+        if pass {
+            phase.set(ChallengePhase::Passed);
+            on_pass();
+        } else {
+            phase.set(ChallengePhase::Failed);
+        }
+        return;
+    }
+    if mic::take_error().is_some() {
+        att.set(Attempt { engine: "quiet", ..Default::default() });
+        phase.set(ChallengePhase::Failed);
+        return;
+    }
+    if tries == 0 {
+        phase.set(ChallengePhase::Failed);
+        return;
+    }
+    std::mem::forget(set_timeout(
+        std::time::Duration::from_millis(120),
+        move || challenge_poll(idx, phase, att, tries - 1, on_pass),
+    ));
+}
+
+/// 全部字母跟读闯关：依次显示 47 个字母（声母+韵母），自动播标准音，
+/// 孩子点「我读好了」录音；下面是本次作答面板（听到什么 / 分数 / 回放 / 人工判定）。
+///
+/// 人工的「对 / 错」会连同 WAV 一起落到 App 私有目录，用来标阈值、微调模型。
+fn recognition_challenge() -> impl IntoElement {
+    use crate::data::letter_templates::{LETTERS, LETTER_SYLLABLES, LETTER_TONES};
+    use crate::data::letter_spell_keys::LETTER_SPELL_KEYS;
+
+    let idx: Signal<usize> = signal(0);
+    let phase: Signal<ChallengePhase> = signal(ChallengePhase::Ready);
+    // 本次作答结果（听到的音节、分数、落盘路径）。
+    let att: Signal<Attempt> = signal(Attempt::default());
+    // 人工判定：0 未判、1 对、2 错。
+    let mark: Signal<u8> = signal(0);
+    let total = LETTERS.len();
+
+    // 打勾动画值：一次性的缩放 + 透明度。
+    let check_scale = animated_value(0.4);
+    let check_alpha = animated_value(0.0);
+    let check_scale_echo = check_scale;
+    let check_alpha_echo = check_alpha;
+
+    // 进入某个字母：播标准音 + 复位到 Ready。
+    let speak_letter = move |i: usize| {
+        speak(LETTER_SYLLABLES[i], LETTER_TONES[i], 1.0);
+    };
+
+    // 前进到下一个字母（人工判「对」或机器报错后手动点「下一个」时用）。
+    let advance = move || {
+        let next = (idx.get() + 1) % LETTERS.len();
+        idx.set(next);
+        phase.set(ChallengePhase::Ready);
+        att.set(Attempt::default());
+        mark.set(0);
+        speak(LETTER_SYLLABLES[next], LETTER_TONES[next], 1.0);
+    };
+
+    // 通过时只播放打勾动画，不自动跳（要留时间看面板、判对错）。
+    let anim_phase = phase;
+    let do_pass = move || {
+        anim_to(check_scale, 0.4, 1.15, 260.0, 0.0);
+        anim_to(check_alpha, 0.0, 1.0, 200.0, 0.0);
+        let _ = anim_phase;
+    };
+
+    view()
+        .flex_1()
+        .gap(px(9.0))
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .child(text("跟读闯关 · 全部字母").text_size(px(16.0)).text_color(rgb(0x2C2C2A)))
+                .child(
+                    text(move || format!("{}/{}", idx.get() + 1, total))
+                        .text_size(px(13.0))
+                        .text_color(rgb(0x6C4FF5)),
+                ),
+        )
+        // 进度条：47 个小格，已过关的亮色（响应式 bg，避免动态宽度）。
+        .child(
+            view()
+                .w_full()
+                .h(px(9.0))
+                .flex_row()
+                .gap(px(1.5))
+                .children(
+                    (0..total)
+                        .map(|i| {
+                            let ip = idx;
+                            view()
+                                .flex_1()
+                                .h(px(9.0))
+                                .rounded(px(2.0))
+                                .bg(move || if ip.get() >= i { rgb(0x6C4FF5) } else { rgb(0xEDEAF8) })
+                        })
+                        .collect::<Vec<_>>(),
+                ),
+        )
+        // 当前字母卡（高度收窄，把下面留给作答面板）
+        .child(
+            view()
+                .w_full()
+                .h(px(280.0))
+                .rounded(px(18.0))
+                .bg(rgb(0xFFFFFF))
+                .border(px(2.5))
+                .border_color(move || {
+                    if phase.get() == ChallengePhase::Passed {
+                        rgb(0x2FA37A)
+                    } else if phase.get() == ChallengePhase::Failed {
+                        rgb(0xF0B6C2)
+                    } else {
+                        rgb(0xE6EDF3)
+                    }
+                })
+                .items_center()
+                .justify_center()
+                .gap(px(2.0))
+                .child(
+                    text(move || LETTERS[idx.get()])
+                        .text_size(px(84.0))
+                        .text_color(move || {
+                            if phase.get() == ChallengePhase::Passed {
+                                rgb(0x2FA37A)
+                            } else {
+                                rgb(0x5B47D6)
+                            }
+                        }),
+                )
+                .child(text("听标准音 · 跟读一遍").text_size(px(12.0)).text_color(rgb(0x888780)))
+                // 打勾动画：对勾 ✓ 从 0.4 放大并淡入
+                .child(
+                    view()
+                        .bind_opacity(&check_alpha_echo)
+                        .bind_scale(&check_scale_echo)
+                        .child(text("✓").text_size(px(64.0)).text_color(rgb(0x2FA37A))),
+                ),
+        )
+        // 操作按钮：听标准音 + 我读好了
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    view()
+                        .px(px(13.0))
+                        .py(px(11.0))
+                        .rounded(px(12.0))
+                        .bg(rgb(0xEDEAF8))
+                        .active(|s| s.opacity(0.75))
+                        .on_press({
+                            let sp = speak_letter;
+                            move || sp(idx.get())
+                        })
+                        .child(text("🔊 听标准音").text_size(px(13.0)).text_color(rgb(0x5B47D6))),
+                )
+                .child(
+                    view()
+                        .flex_1()
+                        .px(px(16.0))
+                        .py(px(11.0))
+                        .rounded(px(12.0))
+                        .bg(move || {
+                            if mic::is_recording() {
+                                rgb(0xD9D5EC)
+                            } else {
+                                rgb(0x6C4FF5)
+                            }
+                        })
+                        .active(|s| s.opacity(0.75))
+                        .on_press({
+                            let pi = idx;
+                            let pp = phase;
+                            let pa = att;
+                            let pm = mark;
+                            let panim = do_pass;
+                            move || {
+                                if mic::is_recording() || pp.get() == ChallengePhase::Passed {
+                                    return;
+                                }
+                                let i = pi.get();
+                                if mic::start(1600) {
+                                    pa.set(Attempt::default());
+                                    pm.set(0);
+                                    pp.set(ChallengePhase::Recording);
+                                    challenge_poll(i, pp, pa, 40, panim);
+                                } else {
+                                    pp.set(ChallengePhase::Failed);
+                                }
+                            }
+                        })
+                        .child(
+                            text(move || match phase.get() {
+                                ChallengePhase::Recording => "录音中…",
+                                _ => "🎤 我读好了",
+                            })
+                            .text_size(px(14.0))
+                            .text_color(rgb(0xFFFFFF)),
+                        ),
+                ),
+        )
+        // 作答面板：听到什么 / 分数 / 回放 / 人工判定
+        .child(
+            view()
+                .w_full()
+                .flex_1()
+                .rounded(px(16.0))
+                .bg(rgb(0xFFFFFF))
+                .border(px(1.5))
+                .border_color(rgb(0xEDEAF8))
+                .p(px(12.0))
+                .gap(px(8.0))
+                .child(
+                    view()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            text(move || {
+                                let a = att.get();
+                                if a.heard.is_empty() {
+                                    "本次录音：还没有".to_owned()
+                                } else {
+                                    format!("听到「{}」", a.heard)
+                                }
+                            })
+                            .text_size(px(15.0))
+                            .text_color(rgb(0x2C2C2A)),
+                        )
+                        .child(
+                            text(move || format!("{}%", att.get().percent))
+                                .text_size(px(20.0))
+                                .text_color(move || {
+                                    if att.get().machine_pass {
+                                        rgb(0x1E9E63)
+                                    } else {
+                                        rgb(0xD83A5B)
+                                    }
+                                }),
+                        ),
+                )
+                .child(
+                    text(move || {
+                        let a = att.get();
+                        if a.engine.is_empty() {
+                            return "读一个字母，这里会显示模型听到的音和分数".to_owned();
+                        }
+                        let key = LETTER_SPELL_KEYS.get(idx.get()).copied().unwrap_or("");
+                        match a.engine {
+                            "quiet" => "太安静了，靠近手机再读一次".to_owned(),
+                            "dtw" => format!("目标「{key}」· 旧模板判定"),
+                            _ => format!(
+                                "目标「{key}」· 间隔 {:+.3} · {}",
+                                a.margin,
+                                if a.machine_pass { "机器：过" } else { "机器：不过" }
+                            ),
+                        }
+                    })
+                    .text_size(px(11.0))
+                    .text_color(rgb(0x888780)),
+                )
+                .child(
+                    view()
+                        .flex_row()
+                        .gap(px(8.0))
+                        .child(
+                            view()
+                                .px(px(12.0))
+                                .py(px(9.0))
+                                .rounded(px(11.0))
+                                .bg(move || {
+                                    if att.get().wav.is_empty() {
+                                        rgb(0xF3F1FB)
+                                    } else {
+                                        rgb(0xEDEAF8)
+                                    }
+                                })
+                                .active(|s| s.opacity(0.75))
+                                .on_press({
+                                    let pa = att;
+                                    move || {
+                                        let w = pa.get().wav;
+                                        if !w.is_empty() {
+                                            play_uri(&format!("file://{w}"), 1.0);
+                                        }
+                                    }
+                                })
+                                .child(
+                                    text("▶ 回放")
+                                        .text_size(px(13.0))
+                                        .text_color(move || {
+                                            if att.get().wav.is_empty() {
+                                                rgb(0xB9B4C9)
+                                            } else {
+                                                rgb(0x5B47D6)
+                                            }
+                                        }),
+                                ),
+                        )
+                        .child(
+                            view()
+                                .flex_1()
+                                .py(px(9.0))
+                                .rounded(px(11.0))
+                                .items_center()
+                                .bg(move || if mark.get() == 1 { rgb(0x1E9E63) } else { rgb(0xE3F5EC) })
+                                .active(|s| s.opacity(0.75))
+                                .on_press({
+                                    let pa = att;
+                                    let pm = mark;
+                                    let padv = advance;
+                                    let pphase = phase;
+                                    let pi = idx;
+                                    move || {
+                                        let a = pa.get();
+                                        if a.wav.is_empty() {
+                                            return;
+                                        }
+                                        let key =
+                                            LETTER_SPELL_KEYS.get(pi.get()).copied().unwrap_or("");
+                                        rec_dump::label(
+                                            std::path::Path::new(&a.wav),
+                                            true,
+                                            key,
+                                            &format!(
+                                                "engine={} heard={} margin={:.3} pct={} pass={}",
+                                                a.engine, a.heard, a.margin, a.percent, a.machine_pass
+                                            ),
+                                        );
+                                        pm.set(1);
+                                        pphase.set(ChallengePhase::Passed);
+                                        std::mem::forget(set_timeout(
+                                            std::time::Duration::from_millis(450),
+                                            move || padv(),
+                                        ));
+                                    }
+                                })
+                                .child(text("✓ 对").text_size(px(13.0)).text_color(rgb(0x1E9E63))),
+                        )
+                        .child(
+                            view()
+                                .flex_1()
+                                .py(px(9.0))
+                                .rounded(px(11.0))
+                                .items_center()
+                                .bg(move || if mark.get() == 2 { rgb(0xD83A5B) } else { rgb(0xFDECEF) })
+                                .active(|s| s.opacity(0.75))
+                                .on_press({
+                                    let pa = att;
+                                    let pm = mark;
+                                    move || {
+                                        let a = pa.get();
+                                        if a.wav.is_empty() {
+                                            return;
+                                        }
+                                        let key = LETTER_SPELL_KEYS.get(idx.get()).copied().unwrap_or("");
+                                        rec_dump::label(
+                                            std::path::Path::new(&a.wav),
+                                            false,
+                                            key,
+                                            &format!(
+                                                "engine={} heard={} margin={:.3} pct={} pass={}",
+                                                a.engine, a.heard, a.margin, a.percent, a.machine_pass
+                                            ),
+                                        );
+                                        pm.set(2);
+                                    }
+                                })
+                                .child(text("✗ 错").text_size(px(13.0)).text_color(rgb(0xD83A5B))),
+                        ),
+                )
+                .child(
+                    text(move || match mark.get() {
+                        1 => "已记录「对」，进入下一个…".to_owned(),
+                        2 => "已记录「不对」，可以重录一遍".to_owned(),
+                        _ => {
+                            let a = att.get();
+                            if a.wav.is_empty() {
+                                "".to_owned()
+                            } else {
+                                "听听回放：读对了吗？判一下，我会照你的标注调".to_owned()
+                            }
+                        }
+                    })
+                    .text_size(px(11.0))
+                    .text_color(rgb(0x6C4FF5)),
+                ),
+        )
+}
+
 fn recognition_view() -> impl IntoElement {
+    // 认读页两个子模式：0=易混对辨认，1=全部字母跟读闯关。
+    let sub_mode: Signal<u8> = signal(0);
+
+    view()
+        .flex_1()
+        .gap(px(9.0))
+        .child(
+            view()
+                .w_full()
+                .flex_row()
+                .gap(px(5.0))
+                .child(sub_tab("易混对", sub_mode, 0))
+                .child(sub_tab("跟读闯关", sub_mode, 1)),
+        )
+        .child(
+            when(move || sub_mode.get() == 0, recognition_pairs)
+                .otherwise(recognition_challenge),
+        )
+}
+
+/// 认读页子页签（胶囊）。
+fn sub_tab(label: &'static str, mode: Signal<u8>, value: u8) -> impl IntoElement {
+    let m = mode;
+    view()
+        .flex_1()
+        .py(px(8.0))
+        .rounded(px(11.0))
+        .items_center()
+        .justify_center()
+        .bg(move || if m.get() == value { rgb(0x6C4FF5) } else { rgb(0xF3F1FB) })
+        .active(|s| s.opacity(0.75))
+        .on_press(move || mode.set(value))
+        .child(
+            text(label)
+                .text_size(px(13.0))
+                .text_color(move || {
+                    if m.get() == value { rgb(0xFFFFFF) } else { rgb(0x6C4FF5) }
+                }),
+        )
+}
+
+fn recognition_pairs() -> impl IntoElement {
     let group: Signal<u8> = signal(0);
     let points: Signal<[u8; 12]> = signal(load_recog_points());
     // 听音辨字：目标 0=左 1=右；answer 是本次要辨认的字母索引。

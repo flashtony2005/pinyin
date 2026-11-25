@@ -5,8 +5,11 @@
 //! 错误而不是直接崩。比 JNI + Java `AudioRecord` 少一层 Java 代码，也不
 //! 需要 `JavaVM` 生命周期管理——nsh 的 Java 层我们改不了，原生是最短路径。
 //!
-//! 其他平台（Windows/macOS/Linux，本机开发与 `cargo test`）给桩，返回
-//! [`MicError::UnsupportedPlatform`]，保证跨端 `cargo check` 能过。
+//! Windows 侧用 `cpal`（WASAPI），声卡常见 48 kHz，采集后线性重采样到
+//! 16 kHz 单声道 f32，与 Android 输出格式一致，识别算法无需改动。
+//!
+//! macOS/Linux 仍给桩，返回 [`MicError::UnsupportedPlatform`]，保证跨端
+//! `cargo check` 能过。
 //!
 //! 采集是异步的：`start()` 起后台线程录固定时长，结果放进共享槽；
 //! UI 侧用 `set_timeout` 轮询 `take()`。这样不阻塞引擎线程。
@@ -23,8 +26,10 @@ pub const SAMPLE_RATE: u32 = 16_000;
 /// 类型而不是字符串——分支判断靠类型，不靠解析文案。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MicError {
-    /// 当前构建没有麦克风后端（桌面与测试）。
+    /// 当前构建没有麦克风后端（macOS/Linux 与测试）。
     UnsupportedPlatform,
+    /// 系统里没有可用的输入设备（没插麦 / 没授权）。
+    NoInputDevice,
     /// 设备加载不到 AAudio：Android 8.0（API 26）以下。
     AaudioUnavailable,
     /// `libaaudio.so` 存在但缺少预期符号，通常是系统库被裁剪。
@@ -42,6 +47,7 @@ impl MicError {
     pub fn message(self) -> &'static str {
         match self {
             MicError::UnsupportedPlatform => "当前设备不支持录音",
+            MicError::NoInputDevice => "找不到麦克风，请检查连接与系统录音权限",
             MicError::AaudioUnavailable => "系统版本过低（需 Android 8 以上）",
             MicError::MissingSymbol(_) => "系统音频库不完整，无法录音",
             MicError::OpenFailed(-889) => "没有麦克风权限，请到设置里允许",
@@ -56,6 +62,7 @@ impl fmt::Display for MicError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             MicError::UnsupportedPlatform => write!(f, "no microphone backend on this platform"),
+            MicError::NoInputDevice => write!(f, "no input device available"),
             MicError::AaudioUnavailable => write!(f, "AAudio unavailable (needs API 26)"),
             MicError::MissingSymbol(sym) => write!(f, "libaaudio.so lacks {sym}"),
             MicError::OpenFailed(code) => write!(f, "AAudioStreamBuilder_openStream returned {code}"),
@@ -128,7 +135,12 @@ fn capture(ms: u32) -> Result<Vec<f32>, MicError> {
     android::capture(ms)
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(target_os = "windows")]
+fn capture(ms: u32) -> Result<Vec<f32>, MicError> {
+    windows::capture(ms)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "windows")))]
 fn capture(_ms: u32) -> Result<Vec<f32>, MicError> {
     Err(MicError::UnsupportedPlatform)
 }
@@ -321,5 +333,129 @@ mod android {
             pcm.truncate(total);
             Ok(pcm)
         }
+    }
+}
+
+#[cfg(target_os = "windows")]
+mod windows {
+    use super::{MicError, SAMPLE_RATE};
+    use cpal::Sample as _;
+    use cpal::StreamConfig;
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    /// 线性插值重采样：输入任意采样率，输出 16 kHz。
+    fn resample(input: &[f32], from: u32) -> Vec<f32> {
+        if from == SAMPLE_RATE || input.len() < 2 {
+            return input.to_vec();
+        }
+        let ratio = from as f64 / SAMPLE_RATE as f64;
+        let out_len = (input.len() as f64 / ratio).ceil() as usize;
+        let mut out = Vec::with_capacity(out_len);
+        for i in 0..out_len {
+            let pos = i as f64 * ratio;
+            let idx = pos as usize;
+            if idx + 1 < input.len() {
+                let frac = pos - idx as f64;
+                out.push(input[idx] * (1.0 - frac) as f32 + input[idx + 1] * frac as f32);
+            } else {
+                out.push(input[input.len() - 1]);
+            }
+        }
+        out
+    }
+
+    /// 用给定采样率建一条单声道输入流；数据统一转成 f32 送回。
+    fn try_build(
+        device: &cpal::Device,
+        rate: u32,
+        use_i16: bool,
+        tx: mpsc::Sender<Vec<f32>>,
+    ) -> Result<cpal::Stream, cpal::BuildStreamError> {
+        let config = StreamConfig {
+            channels: 1,
+            sample_rate: cpal::SampleRate(rate),
+            buffer_size: cpal::BufferSize::Default,
+        };
+        let err_tx = tx.clone();
+        let on_err = move |err: cpal::StreamError| {
+            eprintln!("[mic] capture error: {err}");
+            let _ = err_tx.send(Vec::new());
+        };
+        if use_i16 {
+            device.build_input_stream(
+                &config,
+                move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                    let pcm: Vec<f32> = data.iter().map(|s| s.to_sample::<f32>()).collect();
+                    let _ = tx.send(pcm);
+                },
+                on_err,
+                None,
+            )
+        } else {
+            device.build_input_stream(
+                &config,
+                move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                    let _ = tx.send(data.to_vec());
+                },
+                on_err,
+                None,
+            )
+        }
+    }
+
+    pub fn capture(ms: u32) -> Result<Vec<f32>, MicError> {
+        let device = cpal::default_host()
+            .default_input_device()
+            .ok_or(MicError::NoInputDevice)?;
+
+        let default_cfg = device
+            .default_input_config()
+            .map_err(|_| MicError::OpenFailed(-1))?;
+        let native_rate = default_cfg.sample_rate().0;
+        let use_i16 = default_cfg.sample_format() == cpal::SampleFormat::I16;
+
+        let (tx, rx) = mpsc::channel::<Vec<f32>>();
+        // 优先 16 kHz；WASAPI 设备常只给 48 kHz，失败则退回设备默认再试。
+        let (stream, actual_rate) = match try_build(&device, SAMPLE_RATE, use_i16, tx.clone()) {
+            Ok(s) => (s, SAMPLE_RATE),
+            Err(err) if native_rate != SAMPLE_RATE => {
+                eprintln!("[mic] build at 16k failed: {err}; retry at {native_rate}Hz");
+                let s = try_build(&device, native_rate, use_i16, tx)
+                    .map_err(|e| {
+                        eprintln!("[mic] fallback build failed: {e}");
+                        MicError::OpenFailed(-1)
+                    })?;
+                (s, native_rate)
+            }
+            Err(err) => {
+                eprintln!("[mic] build input stream failed: {err}");
+                return Err(MicError::OpenFailed(-1));
+            }
+        };
+        stream.play().map_err(|_| MicError::StartFailed)?;
+
+        let want = (SAMPLE_RATE as u64 * ms as u64 / 1000) as usize;
+        let deadline = Instant::now() + Duration::from_millis(ms as u64 + 400);
+        let mut raw = Vec::with_capacity(want);
+        while raw.len() < want && Instant::now() < deadline {
+            match rx.recv_timeout(Duration::from_millis(120)) {
+                Ok(chunk) if chunk.is_empty() => break,
+                Ok(chunk) => raw.extend_from_slice(&chunk),
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        drop(stream);
+
+        if raw.is_empty() {
+            return Err(MicError::EmptyCapture);
+        }
+        let pcm = resample(&raw, actual_rate);
+        if pcm.len() < want {
+            return Err(MicError::EmptyCapture);
+        }
+        Ok(pcm.into_iter().take(want).collect())
     }
 }
