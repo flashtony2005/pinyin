@@ -19,3 +19,26 @@ assets/audio.orig-*/
 *.log
 __pycache__/
 *.pyc
+
+# 调试截图 / 临时输出（adb screencap 与校验用图，不入库）
+.debug-*.png
+.verify-*.png
+/docs_trial_panel.png
+/err.txt
+
+# 端上录音采集样本：含真人（含儿童）声音，且由 App 运行时生成，不入公开仓库
+/rec/
+/sdcard_rec/
+
+# P0 训练中间产物：模型权重 / 特征缓存 / 第三方语音库，可由 tools/_p0 脚本复现
+tools/_p0/tract_test/
+tools/_p0/bcache/
+tools/_p0/sherpa-onnx-*/
+tools/_p0/*.onnx
+tools/_p0/*.pt
+tools/_p0/*.tar.bz2
+tools/_p0/*.api.json
+tools/*.f32
+tools/probes/
+tools/probes_indep/
+assets/audio/xdf/
